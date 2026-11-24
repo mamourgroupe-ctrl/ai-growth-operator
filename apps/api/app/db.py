@@ -11,7 +11,9 @@ def make_engine(url: str):
 
 
 def get_engine():
-    return make_engine(get_settings().database_url)
+    # The API must never connect with the migration/superuser role: RLS would
+    # be bypassed. The privileged URL is reserved for Alembic only.
+    return make_engine(get_settings().app_database_url)
 
 
 def get_sessionmaker():
