@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from .errors import register_error_handlers
+from .routers.auth import router as auth_router
 
 app = FastAPI(
     title="AI Growth Operator API",
@@ -9,6 +10,7 @@ app = FastAPI(
 )
 
 register_error_handlers(app)
+app.include_router(auth_router)
 
 
 @app.get("/healthz", tags=["health"])

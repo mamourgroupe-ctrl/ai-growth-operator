@@ -7,6 +7,8 @@ import pgserver
 import pytest
 from alembic import command
 from alembic.config import Config
+from app.main import app
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
@@ -55,3 +57,8 @@ def app_db(app_engine):
 def clear_rls_context(db: Session) -> None:
     db.execute(text("SELECT set_config('app.current_tenant_id', '', true)"))
     db.execute(text("SELECT set_config('app.current_user_id', '', true)"))
+
+
+@pytest.fixture
+def client(database: SimpleNamespace) -> TestClient:
+    return TestClient(app)
