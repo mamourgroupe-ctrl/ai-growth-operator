@@ -187,7 +187,25 @@ def upgrade() -> None:
     op.execute(f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO {role}")
 
 
+def _drop_rls(table: str) -> None:
+    # The tenants policy has a subquery over tenant_memberships. Dropping that
+    # table first fails with DependentObjectsStillExist unless policies are
+    # removed before any table in the dependency graph.
+    op.execute(f"DROP POLICY IF EXISTS tenant_isolation ON {table}")
+    op.execute(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY")
+    op.execute(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY")
+
+
 def downgrade() -> None:
+    for table in (
+        "tenants",
+        "tenant_memberships",
+        "ai_generation_jobs",
+        "outbox_events",
+        "audit_logs",
+    ):
+        _drop_rls(table)
+
     for table in (
         "audit_logs",
         "outbox_events",
