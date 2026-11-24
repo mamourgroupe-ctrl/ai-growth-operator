@@ -53,7 +53,9 @@ MVP tenant-owned tables include organizations, memberships, business_profiles, b
 
 ## 5. Git commits
 
-- _Pending finalization after documentation correction commit._
+- `8a01b0615ce1d0d5298a089fecdce7dc25e366d4` — `docs(phase-0): apply architecture audit corrections` (13 files).
+- The commit containing this finalized report is `HEAD` on `arena/5dc98770-ai-growth-operator`; it is included in draft PR #15.
+- All commits remain on the Arena-managed branch only; no commit to `main`, no merge.
 
 ## 6. GitHub artifacts
 
