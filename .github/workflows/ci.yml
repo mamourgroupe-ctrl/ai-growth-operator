@@ -51,8 +51,4 @@ jobs:
       - run: python -m pip install -e ".[dev]"
       - run: bandit -r apps/api/app -ll
       - name: Check for hardcoded secrets
-        run: |
-          if git grep -nE '(SECRET_KEY|PASSWORD|API_KEY|TOKEN)[[:space:]]*=[[:space:]]*["'"'][^"'"'$]+' -- '*.py' '*.ts' '*.tsx'; then
-            echo "Hardcoded secret pattern found"
-            exit 1
-          fi
+        run: python scripts/check_no_secrets.py
