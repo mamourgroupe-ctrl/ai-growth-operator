@@ -46,8 +46,8 @@ def test_migration_created_tables(app_engine) -> None:
 
 
 def test_rls_with_application_role(app_db: Session) -> None:
-    tenant_a, user_a = _seed_tenant(app_db, "مخبز الجزائر", "bakerie-alger", "owner-a@example.test")
-    tenant_b, user_b = _seed_tenant(app_db, "Boulangerie Oran", "boulangerie-oran", "owner-b@example.test")
+    tenant_a, user_a = _seed_tenant(app_db, "مخبز الجزائر", "bakerie-alger", "owner-a@example.com")
+    tenant_b, user_b = _seed_tenant(app_db, "Boulangerie Oran", "boulangerie-oran", "owner-b@example.com")
 
     clear_rls_context(app_db)
     assert app_db.scalar(text("SELECT count(*) FROM tenants")) == 0
@@ -64,7 +64,7 @@ def test_rls_with_application_role(app_db: Session) -> None:
 
 def test_job_claim_never_returns_same_job_twice(app_engine) -> None:
     with Session(app_engine, expire_on_commit=False, future=True) as setup:
-        tenant_id, user_id = _seed_tenant(setup, "Studio A", "studio-a", "studio-a@example.test")
+        tenant_id, user_id = _seed_tenant(setup, "Studio A", "studio-a", "studio-a@example.com")
         set_tenant_context(setup, str(tenant_id), str(user_id))
         for index in range(2):
             set_tenant_context(setup, str(tenant_id), str(user_id))
