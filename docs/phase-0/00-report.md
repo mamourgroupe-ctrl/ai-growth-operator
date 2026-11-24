@@ -27,7 +27,7 @@ No application source, dependency manifest, infrastructure manifest, or test cod
 
 - 14 issues created: [#1](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/1) through [#14](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/14).
 - #1 is the blocking PRD-confirmation gate.
-- Draft PR: _pending creation after push_.
+- Draft PR: [#15](https://github.com/mamourgroupe-ctrl/ai-growth-operator/pull/15) targeting `main`. It is draft and must not be merged without review and approval.
 
 ## 3. Architecture decisions
 
@@ -61,7 +61,9 @@ Design rules: UUID IDs, `timestamptz` UTC storage rendered in `Africa/Algiers`, 
 
 ## 6. Git commits
 
-- _Pending finalization after first documentation commit._
+- `c5a580a92fb040a4dcfbc0a5c2db3f30122bb956` — `docs(phase-0): add planning documentation and backlog` (12 files, 999 insertions).
+- The commit containing this finalized report is `HEAD` on `arena/5dc98770-ai-growth-operator` and is included in draft PR #15.
+- Both commits are on the Arena-managed branch only; no commit was made to `main`.
 
 ## 7. Remaining risks
 
