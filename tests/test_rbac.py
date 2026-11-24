@@ -3,7 +3,7 @@ import uuid
 from app.main import app
 from fastapi.testclient import TestClient
 
-PASSWORD = "CorrectHorseBatteryStaple42!"
+PASSWORD = "CorrectHorseBatteryStaple42!"  # secret-scan-exempt: dummy test credential
 
 
 def _register(prefix: str) -> tuple[TestClient, dict]:

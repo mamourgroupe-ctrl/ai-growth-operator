@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from tests.conftest import clear_rls_context
 
-PASSWORD = "CorrectHorseBatteryStaple42!"
+PASSWORD = "CorrectHorseBatteryStaple42!"  # secret-scan-exempt: dummy test credential
 
 
 def _seed(db: Session, slug: str, email: str) -> tuple[uuid.UUID, uuid.UUID]:
