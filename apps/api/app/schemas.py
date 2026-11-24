@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -54,3 +55,26 @@ class MembershipOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class OrganizationCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    slug: str | None = Field(default=None, max_length=100)
+
+
+class OrganizationUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    default_ui_locale: Literal["ar", "fr"] | None = None
+    default_content_style: Literal["msa", "darija", "fr"] | None = None
+
+
+class MemberCreate(BaseModel):
+    email: EmailStr
+    role: Literal["owner", "editor", "viewer"] = "viewer"
+    is_arabic_reviewer: bool = False
+
+
+class MemberUpdate(BaseModel):
+    role: Literal["owner", "editor", "viewer"] | None = None
+    status: Literal["active", "invited", "suspended"] | None = None
+    is_arabic_reviewer: bool | None = None

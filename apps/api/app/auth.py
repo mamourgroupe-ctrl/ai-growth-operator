@@ -95,6 +95,18 @@ def tenant_membership(
     return membership
 
 
+def require_owner(membership: TenantMembership = Depends(tenant_membership)) -> TenantMembership:
+    if membership.role != "owner":
+        raise Problem(403, "Forbidden", "Owner role is required.", "forbidden")
+    return membership
+
+
+def require_editor(membership: TenantMembership = Depends(tenant_membership)) -> TenantMembership:
+    if membership.role not in ("owner", "editor"):
+        raise Problem(403, "Forbidden", "Editor role is required.", "forbidden")
+    return membership
+
+
 def tenant_db(
     membership: TenantMembership = Depends(tenant_membership),
     db: Session = Depends(get_db),
