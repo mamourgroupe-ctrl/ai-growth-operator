@@ -135,7 +135,9 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True, index=True)
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
     actor_user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
     action: Mapped[str] = mapped_column(String, nullable=False)
     target_type: Mapped[str | None] = mapped_column(String, nullable=True)
