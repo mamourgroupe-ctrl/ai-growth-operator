@@ -67,7 +67,13 @@ Resolved and no longer assumptions: owner-only approval, Arabic default + Darija
 
 ## 6. Git commits
 
-- _Pending finalization after documentation correction commit._
+- `c5a580a92fb040a4dcfbc0a5c2db3f30122bb956` — initial Phase 0 documentation.
+- `c342931` — finalize prior completion report.
+- `8a01b0615ce1d0d5298a089fecdce7dc25e366d4` — second audit corrections.
+- `606c30a` — finalize second audit report.
+- `e5f5b90f251caf61db30501dc9f7404a95333873` — final acceptance corrections.
+- The commit containing this finalized report is `HEAD` on the Arena branch.
+- All commits are on `arena/5dc98770-ai-growth-operator` only; none on `main`.
 
 ## 7. PR #15 status
 
