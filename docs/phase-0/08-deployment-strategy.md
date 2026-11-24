@@ -1,6 +1,6 @@
-# Phase 0 — Deployment Strategy
+# Phase 0 — Deployment Strategy (post-audit)
 
-**Status:** Proposed for approval. No infrastructure is created in Phase 0.
+**Status:** Corrected for approval. No infrastructure created in Phase 0.
 
 ## 1. Environments
 
@@ -9,53 +9,49 @@
 | Local | `docker compose` | Synthetic | Developer |
 | CI ephemeral | Pull request | Synthetic | CI only |
 | Staging | Merge to `main` after review | Anonymized/synthetic | Team |
-| Production | Explicit approved deploy/tag | Real pilot data | Restricted |
+| Production | Explicit approved deploy/tag | Pilot data | Restricted |
 
-No direct push to `main`; no auto-merge; no automatic production promotion from a merge.
+No direct push to `main`; no auto-merge; no automatic production promotion. PR #15 stays draft and unmerged.
 
-## 2. Pipeline outline
+## 2. Pipeline
 
-1. PR opened from Arena-managed branch → lint, typecheck, unit, integration, security, contract tests.
-2. Build container image, scan dependencies, publish to registry with SHA tag.
-3. Reviewer approves; checks pass; PR merges to `main`.
-4. Staging deploy uses the merge SHA; smoke tests run.
-5. Production deploy is a separate manually approved action in GitHub Environments.
+1. PR → lint, typecheck, unit, integration, security, contract tests.
+2. Build/scan container image, tag with commit SHA.
+3. Reviewer approves; checks pass; merge to `main`.
+4. Staging deploy from merge SHA + smoke tests (Arabic UI, approval gate).
+5. Production deploy requires explicit GitHub Environment approval.
 
 ## 3. Database migrations
 
-- Alembic runs as a pre-deploy step with a dedicated migration role.
-- Expand-then-contract: add nullable/backward-compatible structures first, remove old ones in a later release.
-- Every migration has a tested downgrade path.
-- Backups are taken immediately before a migration that touches large tables.
-- Rollback = redeploy previous image tag plus forward-only migration if schema already changed; never blind DB downgrade under load.
+- Alembic pre-deploy step; admin/migration role bypasses RLS explicitly.
+- Expand-then-contract; tested downgrade; deferred ad tables excluded from baseline.
+- RLS policies created with tables in the same migration.
+- Backup before large-table migrations.
 
-## 4. Secrets and configuration
+## 4. Secrets and provider config
 
-- All secrets live in GitHub Environments (staging/production) or the host's secret manager.
-- Required reviewer on production environment.
-- Config is read from environment variables; no `.env` files committed (only `.env.example`).
-- Rotate provider and DB credentials on schedule and immediately after suspected exposure.
+- Provider API keys, FX source credentials, and DB credentials only in GitHub Environments/host secret manager.
+- `ai_provider_configs`/`ai_models` are data rows, not secrets; keys remain external references.
+- Required reviewer on production environment; rotate on exposure.
+- No `.env` files committed; `.env.example` only.
 
-## 5. Availability and observability
+## 5. Observability
 
-- Health endpoints: `/healthz` (process) and `/readyz` (DB + worker).
-- Structured JSON logs with request ID, tenant ID (non-sensitive), and no secret values.
-- Basic error reporting added in Phase 3; full APM is not a Phase 1 dependency.
-- Alerts on 5xx rate, job failure rate, DB connections, and provider cost anomalies.
+- `/healthz`, `/readyz`; structured JSON logs with request/org IDs and redaction.
+- Alerts: 5xx rate, approval-gate blocks, dead-letter jobs, provider cost anomalies, FX snapshot staleness.
+- Full APM deferred.
 
 ## 6. Backups and recovery
 
-- Daily automated backups with 7-day PITR for production.
-- Restore drill before pilot and quarterly thereafter.
-- Recovery objectives to be confirmed with PRD/business owner: proposed RPO ≤ 24h, RTO ≤ 4h.
+- Daily encrypted backups, 7-day PITR; restore drill before pilot and quarterly.
+- Proposed RPO ≤24h, RTO ≤4h pending business confirmation.
+- Rollback: previous image tag + forward-only migration; no blind DB downgrade under load.
 
-## 7. Cost controls
+## 7. Cost and scale controls
 
-- Per-tenant generation quota enforced in API and DB counter.
-- Provider timeout, max tokens, and monthly budget alert.
-- Worker concurrency limited initially to 2.
-- No always-on preview environments for every PR beyond CI lifetime.
+- Per-tenant generation/image quotas; provider cost caps; queue threshold monitoring.
+- Worker concurrency 2 initially; adaptive poll; revisit Redis/Celery at >100 jobs/min or >10k backlog (see ADR-012).
 
 ## 8. Host decision
 
-Default planning assumption: a container host with managed PostgreSQL (for example Fly.io/Render-class services) to avoid Kubernetes. Final host selection must be approved before Phase 3 deployment work.
+Generic container host + managed PostgreSQL (Fly.io/Render-class). Final selection requires approval before Phase 4 deployment work.

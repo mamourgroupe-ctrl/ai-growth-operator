@@ -1,92 +1,97 @@
-# Phase 0 — Technical Architecture
+# Phase 0 — Technical Architecture (post-audit)
 
-**Status:** Proposed for approval. No implementation is authorized by this document.
-**Design principles:** smallest system that supports the product hypothesis; one source of truth; strong tenant isolation; testable without external services; no premature distribution.
+**Status:** Corrected for product-owner review. No implementation authorized.
+**Principles:** Arabic-first, smallest sufficient system, tenant isolation by design, fail-closed external actions, provider independence.
 
 ## 1. System shape
 
 ```text
-Browser (Next.js, later phase)
-        |
-        | HTTPS / JSON
+Responsive Web (Next.js, MVP)
+        | HTTPS / JSON, ar default + fr, DZD + USD display
         v
-API (FastAPI, Python)  -----> PostgreSQL 16 (shared schema, RLS)
-        |                          ^
-        | enqueue job              | read/write
-        v                          |
-ai_generation_jobs table           |
-        |                          |
-        v                          |
-Worker (same Python package) ----> LLM provider adapter (one provider)
+API (FastAPI, Python)
+        |-- Organization/RBAC/approval services
+        |-- AI Gateway (TextProvider + ImageProvider protocols)
+        |-- Job dispatcher (Postgres queue) --> Worker
+        v
+PostgreSQL 16 (shared schema, RLS, FX snapshots, usage records)
+        |
+        v
+LLM / image providers (one active initially, swappable)
 ```
 
-There are three deployable processes at most: web, API, worker. Phase 1 may ship API + worker only.
+Deployables: web, API, worker. Phase 1 may land API + worker first, but responsive web is an MVP deliverable, not a later phase.
 
-## 2. Components
+## 2. Product modules → technical components
 
-| Component | Choice | Rationale |
-|---|---|---|
-| API | Python 3.12 + FastAPI + Pydantic v2 | Typed validation and generated OpenAPI with little boilerplate |
-| Web client | Next.js + TypeScript (Phase 3) | Server-rendered dashboard, one frontend codebase |
-| Database | PostgreSQL 16 | RLS, JSONB, maturity, transactional integrity |
-| DB access | SQLAlchemy 2.0 + Alembic | Explicit migrations, no magic schema sync |
-| Background work | Postgres-backed job table with `FOR UPDATE SKIP LOCKED` | Avoids Redis/Kafka for low initial volume |
-| LLM access | One provider via a thin `ContentGenerator` protocol | Swappable without a multi-provider framework |
-| File storage | None in Phase 1 | Content is text in Postgres |
-| Email | Adapter interface; no provider chosen until invites are needed | Avoids an early external dependency |
-| Observability | Structured JSON logs + health endpoints | Enough for pilot; error tracking added later |
+| Module | Components |
+|---|---|
+| Authentication | sessions, CSRF, Argon2id passwords |
+| Organization management | `tenants` (UI: Organization), memberships, RBAC |
+| Business profile | `business_profiles`, `brand_assets` (minimal) |
+| Product catalog | `products` |
+| AI Marketing Studio | `content_items`, `creative_assets`, `ai_generation_jobs`, AI Gateway |
+| Content calendar | `content_items.scheduled_for` indexed calendar view |
+| Approval center | `approval_requests`, `approval_snapshots`, `external_actions` |
+| Landing pages & leads | `landing_pages`, `leads` |
+| Usage limits | `subscriptions` (lite), `usage_counters`, `ai_usage_records` |
+| Financial safety | `approval_requests` budget fields, FX snapshots, deferred budget tables |
 
-## 3. Request and job flows
+## 3. AI Gateway
 
-**Standard request**
-1. Browser sends session cookie plus CSRF header on mutations.
-2. API authenticates session, resolves tenant membership and role.
-3. A transaction sets `app.current_tenant_id` with `SET LOCAL`.
-4. Query executes under Postgres RLS.
-5. Response is serialized through a Pydantic response model.
+- `TextProvider` and `ImageProvider` protocols with normalized requests/responses.
+- `ai_provider_configs` + `ai_models` define capabilities, enabled flags, priority/fallback order, unit prices, rate limits, residency tags.
+- One provider may be active initially; no provider-specific fields in business tables.
+- Usage/cost recorded per request in `ai_usage_records` with price snapshot.
+- Failure handling: timeout → bounded retry with jitter → circuit breaker → configured fallback provider, all logged.
+- Fallback is blocked when target provider violates residency or cost policy (fail closed).
+- Rate limits: per tenant, per provider, per model; counters in Postgres for MVP.
 
-**AI generation**
-1. `POST /v1/ai/generate` validates input, checks quota, inserts a job with an idempotency key, returns `202`.
-2. Worker claims one job with `SELECT ... FOR UPDATE SKIP LOCKED`.
-3. Worker calls the configured provider adapter with a bounded prompt and timeout.
-4. Result is validated against an expected JSON/text shape and stored on the job.
-5. Client polls `GET /v1/ai/jobs/{job_id}` until terminal state.
+## 4. Approval and external-action flow
 
-No live LLM call is made in CI; tests use a fake adapter.
+1. User requests publish or ad activation → `approval_requests` (pending) + immutable `approval_snapshots`.
+2. Approver reviews snapshot; decision sets status `approved`/`rejected`; approval records actor and timestamp.
+3. Execution gate loads approval, checks `approved`, not expired, not superseded, version match, snapshot hash match.
+4. For ad actions: lock budget row, validate `spent + requested <= ceiling` with FX snapshot, then create `external_actions` row.
+5. Provider call happens only after all validations pass; every attempt written to `external_action_attempts` and `audit_logs`.
+6. Any validation failure stops before the provider call (no spend, no publish).
 
-## 4. Multi-tenancy model
+Budget edits or content edits increment `target_version` and mark prior approvals `superseded`. No in-place edits to approved snapshots. No automatic budget increases.
 
-- Shared database, shared schema.
-- Every tenant-scoped table has `tenant_id uuid NOT NULL`.
-- RLS is enabled on every tenant-scoped table with a policy comparing `tenant_id` to `current_setting('app.current_tenant_id')::uuid`.
-- Application-level authorization still checks membership and role; RLS is defense in depth, not the only check.
-- `users` is global; access is mediated by `tenant_memberships`.
+## 5. PostgreSQL-backed job queue (accepted with hardening)
 
-## 5. Proposed repository layout (documentation only today)
+| Concern | Implementation |
+|---|---|
+| Concurrent claiming | `SELECT ... FOR UPDATE SKIP LOCKED` in short transaction |
+| Lease | `locked_by`, `locked_at`, `heartbeat_at`, stale lease reclaim |
+| Scheduling | `run_at timestamptz`, partial index on due queued jobs |
+| Retries | `attempt_count`, `max_attempts=3`, `next_retry_at` |
+| Backoff | `min(30s * 2^(attempt-1), 15m) + full jitter` |
+| Idempotency | `UNIQUE (tenant_id, idempotency_key)`, provider request ID stored |
+| Failure | `failed`/`dead_letter` terminal states, safe `last_error_code`, manual replay as new job |
+| Monitoring | queue depth, oldest age, success/failure/retry rates, dead-letter count, stale locks, DB load |
+| Concurrency | 2 workers initially, configurable; per-tenant fairness deferred |
+| Limits | Partial indexes, adaptive polling, no large payloads in queue; revisit >100 jobs/min or >10k backlog |
 
-```text
-docs/phase-0/        Phase 0 deliverables
-apps/api/            FastAPI application, Alembic migrations, worker
-apps/web/            Next.js dashboard (later)
-tests/               Unit, integration, security, contract tests
-infra/               Container and deployment manifests
-.github/             Actions and issue templates
-```
+**Trade-off:** transactional consistency with tenant data and no Redis dependency, at the cost of polling load and no broker-native semantics.
 
-A monorepo is used because the API, worker, web app, and migrations share contracts and must version together.
+**Migration path:** keep `JobDispatcher` and job API stable; add Celery + Redis behind the same interface; use an outbox table to avoid dual-write loss; shadow-run before cutover. Redis is not added merely for complexity.
 
-## 6. Non-goals / deliberate omissions
+## 6. Multi-tenancy
 
-- No microservices, message broker, or Kubernetes in Phase 1.
-- No per-tenant database provisioning.
-- No Redis cache.
-- No billing service.
-- No broad provider abstraction or plugin system.
-- No direct social-network publishing APIs.
+Shared database/schema. Every tenant-owned table has `tenant_id` and RLS with `USING`/`WITH CHECK` on `current_setting('app.current_tenant_id')`. Application-level membership/role checks remain mandatory. `users`, `fx_rates`, `ai_provider_configs`, `ai_models` are system tables with admin-only access.
 
-## 7. Cross-references
+## 7. Localization and currency in the stack
 
-- Database details: `03-database-design.md`
-- API details: `04-api-specification.md`
-- Security details: `05-security-architecture.md`
-- Decisions and rationale: `10-architecture-decision-log.md`
+- UI strings: `ar` default, `fr` secondary; RTL-safe layout from the first screen.
+- Generated copy: `ar`, `ar-DZ`, `fr`; locale stored on every content item.
+- Money: stored as `numeric(14,2)` + currency; rendered as DZD + USD using `fx_rates` snapshots.
+- Approval ceilings store native amount, USD display amount, and FX snapshot ID.
+
+## 8. Non-goals
+
+Android, complex CRM, advanced campaign optimization, multi-platform ad automation, advanced analytics, billing, per-tenant databases, microservices, Kubernetes, Redis in MVP.
+
+## 9. Cross-references
+
+Database `03`, API `04`, security `05`, audit `11`, ADRs `10`.

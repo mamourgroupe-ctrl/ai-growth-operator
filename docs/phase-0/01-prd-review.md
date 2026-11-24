@@ -1,84 +1,93 @@
-# Phase 0 — PRD Review
+# Corrected PRD — Phase 0 (post-audit)
 
-**Status:** Conditional pass — the canonical PRD was not available in the repository at review time.
-**Reviewed:** 2026-11-24
-**Reviewed inputs:** `README.md`, repository/GitHub state, Phase 0 authorization message.
+**Status:** Corrected against product-owner decisions supplied in the architecture-audit request. Awaiting final product-owner approval.
+**Source of truth:** Approved decisions listed in the audit request; `README.md`; verified repository state.
+**Note:** No standalone PRD file exists in the repository. This document is the canonical Phase 0 PRD until a separate PRD is supplied.
 
-## 1. Review scope and source-of-truth finding
+## 1. Verified product decisions
 
-A strict check of the repository (default branch `main`, one commit `7820f298`, one file `README.md`) found **no PRD document, issue, discussion, or attachment**. The authorization message also does not include a PRD text. Therefore this review cannot verify or "preserve" product decisions that were approved outside the supplied material.
-
-This document therefore does two things:
-
-1. Records every product decision that *is* verifiable from the supplied material.
-2. Separates inferred product assumptions from verified decisions, so Phase 1 does not silently turn assumptions into commitments.
-
-**Gate:** Phase 1 implementation must not start until the canonical PRD (or an explicit written confirmation of the assumptions below) is supplied and this review is re-approved.
-
-## 2. Verified product decisions
-
-| Decision | Source | Status |
+| Decision | Status | Implementation implication |
 |---|---|---|
-| Repository is `mamourgroupe-ctrl/ai-growth-operator`, private | GitHub API + local `origin` | Confirmed |
-| Product description: "AI-powered Marketing SaaS for Algerian Small Businesses" | `README.md` | Confirmed |
-| Phase 0 is documentation/planning only; no application implementation | Authorization message | Confirmed |
-| Development occurs on Arena-managed branch `arena/5dc98770-ai-growth-operator`; PRs target `main`; no merge without review | Authorization message | Confirmed |
-| No DZ Tenders code, files, branches, configs, or documentation | Verification report | Confirmed |
-| No unnecessary dependencies or overengineering | Authorization message | Confirmed |
+| Market: Algeria | Confirmed | Default timezone `Africa/Algiers`, base currency DZD, Arabic-first UX |
+| Customer segment: small businesses | Confirmed | One lean workspace per business, low operational overhead |
+| Product: multi-tenant SaaS | Confirmed | Organization (tenant) as isolation boundary; shared schema + RLS |
+| Autonomy: human approval required before external publishing or advertising expenditure | Confirmed | Approval center; fail-closed execution gate; versioned immutable approvals |
+| Currency display: DZD and USD | Confirmed | Dual display everywhere money appears; FX snapshot on approvals |
+| Primary interface: responsive web application | Confirmed | Web is MVP, not a later phase |
+| Language priority: Arabic first including Algerian Darija, then French | Confirmed | UI default `ar`; copy locales `ar`, `ar-DZ`, `fr` |
+| Android: future phase | Confirmed | No Android work in MVP or Phase 1 |
 
-## 3. Inferred product hypothesis (not yet confirmed)
+## 2. Product definition
 
-- **Target user:** owner/operator of a small Algerian business who handles marketing alone or with a very small team and has limited time and budget.
-- **Core problem:** creating consistent marketing content and understanding what works is manual, fragmented across channels, and hard to measure.
-- **Value proposition:** one workspace to plan a campaign, generate reviewable marketing drafts with AI, and see simple performance metrics.
-- **Localization assumption:** French-first interface with Arabic-ready data model; DZD currency; `Africa/Algiers` timezone. Darija is treated as a content variant, not a separate UI locale, until confirmed.
+AI Growth Operator is a multi-tenant SaaS for Algerian small businesses that helps a small team produce Arabic-first marketing copy and creative assets, organize them in a content calendar, obtain explicit human approval, and publish only through a controlled action path. Basic landing pages and lead capture are included. Advertising activation is designed for safety but platform automation is deferred.
 
-## 4. Inferred MVP scope (candidates, not commitments)
+**Technical vocabulary:** "Organization" is the product-facing name; `tenant` is the technical identifier.
 
-1. Workspace/tenant with owner, editor, and viewer roles.
-2. Campaign object with goal, status, and date range.
-3. AI-assisted content drafts for short social posts, ad copy, and email copy.
-4. Mandatory human review/approval before any content is considered publishable.
-5. Simple metrics view sourced initially from manual import rather than channel APIs.
-6. Per-plan usage quotas for AI generations.
+## 3. Language and locale policy
 
-## 5. Explicitly out of scope for Phase 1
+- UI locale priority: `ar` (Arabic, default) → `fr` (French, secondary). Darija UI copy may be added later without schema change.
+- AI copy locales: `ar` (Modern Standard Arabic), `ar-DZ` (Algerian Darija, first-class), `fr`.
+- All generated content stores its locale; review workflow shows locale explicitly.
+- Prompt templates are locale-aware and versioned in the AI gateway; no French-only assumptions remain.
 
-- Direct publishing to social platforms or ad accounts.
-- Billing/payment processing.
-- Multiple AI providers behind a user-facing provider selector.
-- Mobile native apps.
-- Public/partner API.
-- Web scraping, tender scraping, or any DZ Tenders functionality.
-- Per-tenant databases or microservice decomposition.
+## 4. Currency policy
 
-## 6. Proposed success metrics (need PRD confirmation)
+- Base currency: `DZD`. Display currencies: `DZD` and `USD` simultaneously where monetary values are shown.
+- `fx_rates` stores dated rate snapshots with source; displayed USD values use a snapshot, not a live undetermined rate.
+- Approvals store an exact ceiling in its native currency plus USD display amount and `fx_rate_snapshot_id`.
+- No spending decision is ever based on an unsnapshotted conversion.
 
-| Metric | Proposed target | Why |
-|---|---|---|
-| Time to first campaign | < 10 minutes after signup | Activation friction |
-| Time to first AI draft | < 60 seconds p95 | Core value speed |
-| Draft approval rate | Track only in Phase 2 | Quality signal |
-| Weekly active tenants | Track from first pilot | Retention signal |
-| API p95 latency (non-AI) | < 300 ms | Baseline performance |
+## 5. MVP scope — MUST HAVE
 
-These are planning defaults, not approved targets.
+1. Authentication (email/password, sessions, CSRF).
+2. Organization management (create, members, roles).
+3. Business profile (name, sector, contact, address, brand voice).
+4. Product catalog (products/services used in copy generation).
+5. AI Marketing Studio (text + creative generation, job status, usage limits).
+6. Arabic marketing copy (`ar`, `ar-DZ`) with French secondary.
+7. Creative generation via provider-independent gateway.
+8. Content calendar (scheduled content items).
+9. Approval center (publish and ad-spend approvals, versioned snapshots).
+10. Basic landing pages with publish approval.
+11. Lead management (leads from landing pages).
+12. AI usage limits per plan.
 
-## 7. Open questions blocking full confirmation
+## 6. Explicitly deferred
 
-1. Where is the canonical PRD, and which decisions are immutable?
-2. Which channels are in the MVP (e.g., Facebook/Instagram copy only, or also email/WhatsApp)?
-3. Which languages/locales must ship in MVP (French, Arabic, Darija)?
-4. Is content draft-only, or is direct publishing required in MVP?
-5. Is billing required for pilot users, or are plans metadata only?
-6. What is the initial analytics data source (manual CSV, spreadsheet import, or API)?
-7. Which AI provider and data-residency constraints apply?
-8. What Algerian data-protection/compliance obligations must be satisfied?
-9. What are the pricing tiers and generation quotas?
-10. Who has authority to approve generated content (editor vs owner)?
+- Android application.
+- Complex CRM.
+- Advanced automated campaign optimization.
+- Multi-platform advertising automation and direct social publishing.
+- Advanced analytics.
+- Billing/payment processing (plan quotas only).
+- Full digital-asset management and brand-asset versioning.
+- Multi-provider user-facing selector (gateway supports future providers internally).
 
-## 8. Review verdict
+Advertising tables (`ad_accounts`, `ad_campaigns`, `ad_budget_limits`, `spend_events`) are documented for safety but not implemented in MVP.
 
-**Conditional pass for Phase 0 planning only.** The architecture, database, API, security, and delivery documents that follow are intentionally conservative and avoid committing to unresolved product decisions. They use the assumption register above and flag each assumption where it affects design.
+## 7. Success metrics (proposed, confirm at approval)
 
-Phase 1 authorization should be preceded by a short PRD confirmation pass that answers Section 7.
+| Metric | Proposed target |
+|---|---|
+| Time to first Arabic draft | < 60 seconds p95 |
+| Time to first approved publish-ready item | < 10 minutes after signup |
+| Approval rejection rate | Track only |
+| Weekly active organizations | Track from pilot |
+| API p95 latency (non-AI) | < 300 ms |
+
+## 8. Human approval model
+
+Publishing and advertising activation always require explicit approval. Every approved advertising action carries an exact budget ceiling; budget changes supersede prior approvals; approved snapshots are immutable; no automatic budget increases; every external action is recorded. Full design in `11-architecture-audit.md` Section 4 and `03-database-design.md`.
+
+## 9. Remaining open questions
+
+1. Final product-owner approval of this corrected PRD.
+2. FX rate source and rounding rules.
+3. Provider data-residency constraints and approved provider list.
+4. Darija content review ownership and quality bar.
+5. Exact plan quotas and USD display precision.
+6. Whether editor or owner may approve (current proposal: owner + editor for content; owner only for ad spend).
+
+## 10. Review verdict
+
+Ready for product-owner approval. Phase 1 remains blocked until approval is explicit.

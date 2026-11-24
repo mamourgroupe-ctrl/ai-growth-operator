@@ -1,97 +1,84 @@
-# Phase 0 — Completion Report
+# Phase 0 — Completion Report (post-audit)
 
-**Status:** Phase 0 complete; awaiting approval for Phase 1.
+**Status:** Phase 0 corrections complete; **not approved yet**. Phase 1 not started. PR #15 remains draft and unmerged.
 **Branch:** `arena/5dc98770-ai-growth-operator`
-**Target for PR:** `main` (draft, no merge)
 
-## 1. Files created
+## ملخص تنفيذي
 
-| File | Purpose |
+تم تدقيق وثائق Phase 0 مقابل القرارات المعتمدة، وتصحيح ثلاث فجوات جوهرية: العربية أولاً مع الدارجة، عرض DZD وUSD معاً، ونموذج موافقة مالية صارم يمنع أي نشر أو صرف بدون موافقة سارية وسقف محدد. تمت مراجعة قاعدة البيانات، وتأكيد مسار PostgreSQL للوظائف الخلفية مع شروط التوسّع، وتصميم بوابة AI مستقلة عن المزوّد. لا الشركة ولا الفرع الآخر تأثرا.
+
+## 1. Files created / updated
+
+| File | Change |
 |---|---|
-| `README.md` | Updated with Phase 0 documentation index (no application code) |
-| `docs/phase-0/00-report.md` | This completion report |
-| `docs/phase-0/01-prd-review.md` | PRD review and explicit assumption register |
-| `docs/phase-0/02-technical-architecture.md` | System shape, components, flows, non-goals |
-| `docs/phase-0/03-database-design.md` | PostgreSQL schema, constraints, indexes, RLS |
-| `docs/phase-0/04-api-specification.md` | v1 endpoint inventory, schemas, conventions |
-| `docs/phase-0/05-security-architecture.md` | Threat model, authn/authz, AI and supply-chain controls |
-| `docs/phase-0/06-development-roadmap.md` | Phased sequencing and exit criteria |
-| `docs/phase-0/07-testing-strategy.md` | Test pyramid and non-negotiable cases |
-| `docs/phase-0/08-deployment-strategy.md` | Environments, pipeline, migrations, backups |
-| `docs/phase-0/09-github-backlog.md` | 14 GitHub issues with dependencies |
-| `docs/phase-0/10-architecture-decision-log.md` | ADR-001 … ADR-010 |
+| `README.md` | Added audit doc link |
+| `docs/phase-0/00-report.md` | Updated report (this file) |
+| `docs/phase-0/01-prd-review.md` | Rewritten as corrected PRD |
+| `docs/phase-0/02-technical-architecture.md` | Updated: AI gateway, approval gate, Arabic-first, dual currency, hardened queue |
+| `docs/phase-0/03-database-design.md` | Rewritten: 14-entity evaluation, MVP vs deferred, isolation matrix |
+| `docs/phase-0/04-api-specification.md` | Updated: organization paths, approval-gated publish, DZD/USD, locales |
+| `docs/phase-0/05-security-architecture.md` | Updated: fail-closed financial safety, provider policy |
+| `docs/phase-0/06-development-roadmap.md` | Updated: corrected MVP scope and issue mapping |
+| `docs/phase-0/07-testing-strategy.md` | Updated: approval, budget, queue, gateway tests |
+| `docs/phase-0/08-deployment-strategy.md` | Updated: FX/provider config, approval gate checks |
+| `docs/phase-0/09-github-backlog.md` | Updated: issues #1–#25 with corrected scope |
+| `docs/phase-0/10-architecture-decision-log.md` | ADR-009 superseded, ADR-005 amended, ADR-011..016 added |
+| `docs/phase-0/11-architecture-audit.md` | New independent audit report |
 
-No application source, dependency manifest, infrastructure manifest, or test code was added.
+No application code, dependency manifests, or infrastructure manifests were added.
 
-## 2. GitHub artifacts
+## 2. Architecture decisions (post-audit)
 
-- 14 issues created: [#1](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/1) through [#14](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/14).
-- #1 is the blocking PRD-confirmation gate.
-- Draft PR: [#15](https://github.com/mamourgroupe-ctrl/ai-growth-operator/pull/15) targeting `main`. It is draft and must not be merged without review and approval.
+1. Single private repo / Arena branch → PRs to `main`, no merge without review.
+2. Shared-schema tenant isolation with RLS on every tenant-owned entity.
+3. Responsive web is MVP; Android is future.
+4. Arabic UI default with Algerian Darija copy support; French secondary (ADR-011 supersedes ADR-009).
+5. Postgres job queue retained with explicit concurrency, retry/backoff, scheduling, idempotency, dead-letter, monitoring, and Celery migration path (ADR-012).
+6. Provider-independent AI gateway with text + image protocols, model config, usage/cost, limits, fallback (ADR-013).
+7. Fail-closed approval and financial safety with immutable snapshots and exact budget ceilings (ADR-014).
+8. DZD + USD display from FX snapshots; clients cannot submit rates (ADR-015).
+9. Corrected MVP scope; ad/social/advanced analytics deferred (ADR-016).
 
-## 3. Architecture decisions
+## 3. Database design summary
 
-1. **Single private repo / monorepo** — API, worker, web, migrations version together (ADR-001).
-2. **Arena branch for development, PRs to `main`, no merge without review** (ADR-002).
-3. **Shared-schema multi-tenancy with Postgres RLS** using `app.current_tenant_id`, plus application RBAC (ADR-003).
-4. **FastAPI + Python for API/worker; Next.js for the later dashboard** — no experimental frameworks (ADR-004).
-5. **Postgres-backed async job table** with `FOR UPDATE SKIP LOCKED`; no Redis or Kafka initially (ADR-005).
-6. **Application-managed Argon2id sessions** with CSRF; revisit managed IdP if PRD requires SSO/MFA (ADR-006).
-7. **One LLM provider behind a thin adapter**; no provider selector or plugin system (ADR-007).
-8. **Billing, direct publishing, and mobile deferred** (ADR-008).
-9. **French-first, Arabic-ready data model** as an explicit assumption pending PRD confirmation (ADR-009).
-10. **Documentation-only Phase 0** (ADR-010).
+MVP tenant-owned tables include organizations, memberships, business_profiles, brand_assets, products, content_items, creative_assets, ai_generation_jobs, ai_usage_records, subscriptions, usage_counters, approval_requests, approval_snapshots, external_actions, external_action_attempts, landing_pages, leads, audit_logs. System tables: users, sessions, fx_rates, ai_provider_configs, ai_models. Deferred but documented: social_connections, ad_accounts, ad_campaigns, ad_budget_limits, spend_events. Every tenant-owned table is RLS-protected.
 
-## 4. Database design summary
+## 4. Approval and security decisions
 
-Core tables: `tenants`, `users`, `tenant_memberships`, `sessions`, `campaigns`, `content_items`, `ai_generation_jobs`, `metric_snapshots`, `usage_counters`, `audit_logs`.
+- Distinct publish and ad-spend approvals; budget changes supersede prior approvals; no automatic increases.
+- Approved snapshots immutable/versioned; external actions logged; validation failure blocks provider call.
+- Owner-only ad approval; owner/editor content approval.
+- Argon2id + hashed opaque sessions + CSRF; redacted logs; secrets in GitHub Environments.
+- Tenant isolation verified by RLS and application checks; branch protection tracked as #14.
 
-Design rules: UUID IDs, `timestamptz` UTC storage rendered in `Africa/Algiers`, `numeric(14,2)` + DZD currency, soft deletes on user-visible entities, `tenant_id` on every tenant-scoped table, RLS with `WITH CHECK`, idempotency key unique per tenant, bounded job retries, append-only audit log. Migrations use Alembic with expand-then-contract discipline.
+## 5. Git commits
 
-## 5. Security decisions
+- _Pending finalization after documentation correction commit._
 
-- TLS/HSTS; HttpOnly/Secure/SameSite=Lax cookies; SHA-256-hashed opaque session tokens; Argon2id passwords.
-- CSRF token required on every mutation; RBAC matrix owner/editor/viewer.
-- RLS plus explicit membership/role checks; cross-tenant access tests are a Phase 1 exit criterion.
-- Prompt injection treated as untrusted input; no tool access; bounded prompt/output size; validated model output; safe error codes.
-- Secrets only in GitHub Environments; logs redacted; no production data in lower environments.
-- Daily encrypted backups with PITR; restore drill before pilot.
-- Required checks and review before merge; branch protection tracked as issue #14.
-- No compliance claim until Algerian data-protection and provider-residency review is completed.
+## 6. GitHub artifacts
 
-## 6. Git commits
-
-- `c5a580a92fb040a4dcfbc0a5c2db3f30122bb956` — `docs(phase-0): add planning documentation and backlog` (12 files, 999 insertions).
-- The commit containing this finalized report is `HEAD` on `arena/5dc98770-ai-growth-operator` and is included in draft PR #15.
-- Both commits are on the Arena-managed branch only; no commit was made to `main`.
+- Issues #1–#25 exist; #1 is the approval gate; ad/social/analytics/Android are explicitly not scheduled.
+- Draft PR [#15](https://github.com/mamourgroupe-ctrl/ai-growth-operator/pull/15) targets `main`; not merged.
 
 ## 7. Remaining risks
 
-| Risk | Severity | Mitigation |
-|---|---|---|
-| Canonical PRD missing; assumptions may be wrong | High | Gate #1 blocks Phase 1; assumption register in 01-prd-review.md |
-| Branch is temporary and not `main` | Medium | All work via reviewed PR to `main`; no direct merge |
-| Custom session auth ownership | Medium | Security tests in Phase 1; revisit managed IdP after PRD |
-| Tenant isolation failure | High | RLS + app checks + dedicated security suite |
-| LLM cost/prompt-injection exposure | Medium | Quotas, timeouts, output validation, fake adapter in CI |
-| Locale/approver-role assumptions | Medium | Confirm in gate #1 before implementing RBAC/locale flows |
-| Host/provider not selected | Low | Defer to Phase 3 approval; keep deployment generic |
-| Compliance obligations unknown | Medium | Legal review before pilot data |
+| Risk | Severity |
+|---|---|
+| Product-owner approval pending | High |
+| FX rate source and rounding not selected | Medium |
+| Provider residency constraints unknown | Medium |
+| Darija review ownership/quality bar open | Medium |
+| Approver role for content (owner+editor) needs confirmation | Medium |
+| Postgres queue scaling threshold unmeasured | Medium |
+| Ad execution deferred but safety schema already fixed | Medium |
+| Branch protection not enabled | Medium |
+
+Full list in `11-architecture-audit.md` §8.
 
 ## 8. Recommended Phase 1 tasks
 
-In dependency order, after gate #1 and explicit Phase 1 approval:
-
-1. #2 — repo tooling and CI.
-2. #14 — branch protection and required checks.
-3. #3 — Alembic baseline with RLS.
-4. #6 — OpenAPI contract and error format.
-5. #4 — auth, sessions, CSRF.
-6. #5 — tenant membership and RBAC.
-7. #7 — tenant-isolation security suite.
-
-Phase 1 is complete only when a user can register, create a tenant, and a test proves cross-tenant reads fail, with CI green.
+After #1 closes with explicit approval: #2, #14, #3, #6, #4, #5, #7 in that order. Exit when register → organization → RLS denial test passes and CI is green.
 
 ## 9. Stop condition
 
-Phase 1 implementation is **not started**. Awaiting explicit approval.
+Phase 1 implementation is **not started**. Awaiting explicit product-owner approval. No merge of PR #15.

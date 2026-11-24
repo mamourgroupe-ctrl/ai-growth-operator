@@ -15,4 +15,5 @@ Planning only — application implementation is not authorized yet.
 - [Deployment strategy](docs/phase-0/08-deployment-strategy.md)
 - [GitHub backlog](docs/phase-0/09-github-backlog.md)
 - [Architecture decision log](docs/phase-0/10-architecture-decision-log.md)
+- [Architecture audit (post-audit corrections)](docs/phase-0/11-architecture-audit.md)
 - [Phase 0 report](docs/phase-0/00-report.md)

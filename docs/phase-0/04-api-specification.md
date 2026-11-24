@@ -1,156 +1,90 @@
-# Phase 0 — API Specification
+# Phase 0 — API Specification (post-audit)
 
-**Status:** Proposed contract for approval. No routes are implemented in Phase 0.
-**Version:** `v1`
-**Base URL:** `https://api.<domain>/v1` (domain to be confirmed)
+**Status:** Corrected for approval. No routes implemented in Phase 0.
+**Version:** `v1` · Base: `https://api.<domain>/v1`
 
 ## 1. Conventions
 
-- JSON request/response bodies; `Content-Type: application/json`.
-- Auth: HttpOnly session cookie; every mutation also requires `X-CSRF-Token`.
-- Dates: ISO-8601 (`2026-11-24T14:31:45Z`); dates without time use `YYYY-MM-DD`.
-- IDs: UUID strings.
-- Pagination: `limit` (default 20, max 100) and opaque `cursor`.
-- Errors: RFC 7807 `application/problem+json`.
-- Idempotency: `Idempotency-Key` required on `POST /campaigns` and `POST /ai/generate`.
-- Rate limits: 100 requests/minute per user; AI generation quota per plan (default 10/hour, configurable).
-- Breaking changes require `/v2`; additive fields are allowed in `/v1`.
+- JSON; RFC 7807 `application/problem+json` errors.
+- Auth: HttpOnly session cookie + `X-CSRF-Token` on every mutation.
+- "Organization" is the product term; path segment `{org_id}` is the technical tenant UUID.
+- Locale header `Accept-Language`: `ar` default, `fr` secondary; content locale stored per item (`ar`, `ar-DZ`, `fr`).
+- Money responses include dual display: `{"amount":"12000.00","currency":"DZD","display":{"DZD":"12,000.00 DZD","USD":"... USD"}}`.
+- Pagination `limit`/`cursor`; idempotency header required on generation and approval creation.
+- Rate limits: 100 req/min/user; AI limits from `subscriptions`.
 
 ## 2. Endpoint inventory
 
-| Method | Path | Auth | Purpose |
+| Method | Path | Role | Purpose |
 |---|---|---|---|
-| GET | `/healthz` | none | Liveness |
-| GET | `/readyz` | none | DB + worker readiness |
-| POST | `/auth/register` | none | Create user + first tenant |
-| POST | `/auth/login` | none | Start session |
-| POST | `/auth/logout` | session | Revoke session |
-| GET | `/auth/me` | session | Current user + memberships |
-| GET | `/tenants` | session | Tenants for current user |
-| POST | `/tenants` | session | Create additional tenant (owner) |
-| GET | `/tenants/{tenant_id}` | member | Tenant detail |
-| PATCH | `/tenants/{tenant_id}` | owner | Update tenant settings |
-| GET | `/tenants/{tenant_id}/members` | member | List members |
-| POST | `/tenants/{tenant_id}/members` | owner | Invite/add member |
-| PATCH | `/tenants/{tenant_id}/members/{user_id}` | owner | Change role/status |
-| GET | `/tenants/{tenant_id}/campaigns` | member | List campaigns |
-| POST | `/tenants/{tenant_id}/campaigns` | editor+ | Create campaign |
-| GET | `/tenants/{tenant_id}/campaigns/{id}` | member | Campaign detail |
-| PATCH | `/tenants/{tenant_id}/campaigns/{id}` | editor+ | Update campaign |
-| GET | `/tenants/{tenant_id}/content` | member | List content drafts |
-| POST | `/tenants/{tenant_id}/content` | editor+ | Create/edit content manually |
-| GET | `/tenants/{tenant_id}/content/{id}` | member | Content detail |
-| PATCH | `/tenants/{tenant_id}/content/{id}` | editor+ | Update content |
-| POST | `/tenants/{tenant_id}/content/{id}/approve` | editor+ | Mark approved |
-| POST | `/tenants/{tenant_id}/ai/generate` | editor+ | Enqueue generation job |
-| GET | `/tenants/{tenant_id}/ai/jobs/{job_id}` | member | Job status/result |
-| GET | `/tenants/{tenant_id}/analytics/summary` | member | Aggregated metrics |
-| POST | `/tenants/{tenant_id}/analytics/import` | editor+ | Manual metrics import |
+| GET | `/healthz`, `/readyz` | none | Liveness/readiness |
+| POST | `/auth/register`, `/auth/login`, `/auth/logout` | —/—/session | Auth |
+| GET | `/auth/me` | session | User + memberships |
+| GET/POST | `/organizations` | session | List/create organizations |
+| GET/PATCH | `/organizations/{org_id}` | member/owner | Settings incl. locales + display currencies |
+| GET/POST | `/organizations/{org_id}/members` | member/owner | Members |
+| PATCH | `/organizations/{org_id}/members/{user_id}` | owner | Role change |
+| GET/PATCH | `/organizations/{org_id}/profile` | member/editor | Business profile + brand voice |
+| GET/POST/PATCH | `/organizations/{org_id}/products` | member/editor | Product catalog |
+| GET/POST/PATCH | `/organizations/{org_id}/content` | member/editor | Marketing copy drafts, locale-aware |
+| POST | `/organizations/{org_id}/content/{id}/approve` | editor+ | Create approval request (not publish) |
+| GET | `/organizations/{org_id}/calendar?from&to` | member | Scheduled content |
+| GET/POST | `/organizations/{org_id}/creatives` | member/editor | Creative assets |
+| POST | `/organizations/{org_id}/ai/generate` | editor+ | Text or image generation job |
+| GET | `/organizations/{org_id}/ai/jobs/{job_id}` | member | Job status/result |
+| GET | `/organizations/{org_id}/usage` | member | AI usage, limits, cost |
+| GET/POST | `/organizations/{org_id}/approvals` | member/editor | Approval center |
+| POST | `/organizations/{org_id}/approvals/{id}/decide` | approver | approve/reject with snapshot hash |
+| POST | `/organizations/{org_id}/content/{id}/publish` | editor+ | Requires `approval_id`; fail-closed |
+| GET/POST | `/organizations/{org_id}/landing-pages` | member/editor | Basic landing pages |
+| POST | `/organizations/{org_id}/landing-pages/{id}/publish` | editor+ | Requires `approval_id` |
+| GET/POST | `/organizations/{org_id}/leads` | member/editor | Lead management |
+| GET | `/organizations/{org_id}/money/display` | member | DZD/USD display using snapshot |
+| POST | `/organizations/{org_id}/ads/activate` | owner (deferred) | Reserved; requires approval + exact ceiling |
 
-Role shorthand: `member` = owner/editor/viewer; `editor+` = owner/editor.
+## 3. Key schemas
 
-## 3. Representative schemas
-
-### `Tenant`
+### Approval request
 ```json
 {
-  "id": "5e1f...",
-  "name": "Café El Madania",
-  "slug": "cafe-el-madania",
-  "locale": "fr",
-  "timezone": "Africa/Algiers",
-  "currency": "DZD",
-  "plan": "free"
+  "id": "a91c...",
+  "kind": "ad_activation",
+  "target_type": "ad_campaign",
+  "target_id": "c33f...",
+  "target_version": 2,
+  "status": "approved",
+  "budget": {"amount": "25000.00", "currency": "DZD", "usd_display": "...", "fx_snapshot_id": "f77..."},
+  "snapshot_id": "s12...",
+  "decided_by": "7b2d...",
+  "decided_at": "2026-11-24T14:40:00Z"
 }
 ```
 
-### `Campaign`
+### Generation request
 ```json
-{
-  "id": "9a3c...",
-  "tenant_id": "5e1f...",
-  "name": "Ramadan launch",
-  "goal": "awareness",
-  "status": "draft",
-  "starts_on": "2026-12-01",
-  "ends_on": "2026-12-31",
-  "created_by": "7b2d...",
-  "created_at": "2026-11-24T14:31:45Z"
-}
-```
-
-### `ContentItem`
-```json
-{
-  "id": "c41d...",
-  "tenant_id": "5e1f...",
-  "campaign_id": "9a3c...",
-  "kind": "social_post",
-  "locale": "fr",
-  "title": null,
-  "body": "Découvrez notre nouvelle carte...",
-  "status": "in_review",
-  "source": "ai_edited",
-  "approved_by": null
-}
-```
-
-### `GenerationJob`
-```json
-{
-  "id": "f0a9...",
-  "tenant_id": "5e1f...",
-  "status": "succeeded",
-  "kind": "social_post",
-  "locale": "fr",
-  "result_body": "Découvrez notre nouvelle carte...",
-  "error_code": null,
-  "created_at": "2026-11-24T14:31:45Z",
-  "finished_at": "2026-11-24T14:31:49Z"
-}
-```
-
-### Problem response
-```json
-{
-  "type": "https://api.<domain>/problems/forbidden",
-  "title": "Forbidden",
-  "status": 403,
-  "detail": "Your role cannot perform this action.",
-  "instance": "/v1/tenants/5e1f.../content"
-}
-```
-
-## 4. AI generation request
-
-```json
-POST /v1/tenants/{tenant_id}/ai/generate
+POST /organizations/{org_id}/ai/generate
 Idempotency-Key: 6f1b...
-X-CSRF-Token: ...
-
 {
+  "capability": "text",
   "kind": "social_post",
-  "locale": "fr",
-  "campaign_id": "9a3c...",
-  "brief": "Short post about a new mint tea special",
-  "tone": "friendly"
+  "locale": "ar-DZ",
+  "brief": "إعلان قصير عن عرض جديد",
+  "brand_voice_ref": "b10..."
 }
 ```
+Image requests use `capability: "image"` with `brand_assets` context; provider/model selected by gateway config, not by client.
 
-Responses: `202 Accepted` with job representation; `409` for duplicate idempotency key with different payload; `429` when quota exceeded; `422` for validation failure.
+### Approval-gated publish
+```json
+POST /organizations/{org_id}/content/{id}/publish
+{"approval_id": "a91c...", "expected_snapshot_hash": "sha256:..."}
+```
+Server verifies approval is `approved`, not expired/superseded, version and hash match, then records `external_actions` before calling any provider. Missing/invalid approval → `409`/`403`, no external call.
 
-Rules:
-- `brief` max 2000 characters; server truncates or rejects longer input (reject preferred).
-- Generated text max 4000 characters.
-- The worker never receives credentials or tenant data except the brief and campaign name.
-- Polling endpoint returns terminal state and result; no long-lived streaming in v1.
+## 4. Money and FX
 
-## 5. Analytics import
+All monetary responses show both DZD and USD. USD uses `fx_rates` snapshot chosen by the server; clients cannot submit a rate. Approval budgets store native amount, USD display amount, and FX snapshot ID. No spend decision uses an unsnapshotted rate.
 
-Phase 1 uses a manual JSON/CSV import with columns: `date`, `channel`, `impressions`, `clicks`, `conversions`, `spend`, `campaign_id` (optional). Imports are idempotent by `source_ref`. No external platform OAuth is part of v1.
+## 5. Contract governance
 
-## 6. Contract governance
-
-- OpenAPI JSON is generated from FastAPI and committed as a schema artifact once Phase 1 starts.
-- Contract tests validate example requests/responses against the schema.
-- Any breaking change is rejected in CI unless the version path is bumped.
+OpenAPI generated from FastAPI and committed once Phase 1 starts. Contract tests block breaking changes without a `/v2` bump. Deferred ad endpoints are documented but return `501` until implemented.

@@ -1,65 +1,51 @@
-# Phase 0 — Architecture Decision Log
+# Phase 0 — Architecture Decision Log (post-audit)
 
-Each decision is reversible only by a new ADR that supersedes it.
+Superseded decisions remain for traceability; a superseding ADR always wins.
 
----
+## ADR-001 — Single private repository / monorepo
+**Status:** Accepted. Context: shared contracts. Decision: all work in `ai-growth-operator`. Consequence: simple CI; larger repo later.
 
-## ADR-001 — Single private repository, monorepo layout
-- **Status:** Accepted (Phase 0 proposal)
-- **Context:** API, worker, web, and migrations share contracts; repo must stay isolated from other projects.
-- **Decision:** Keep everything in `mamourgroupe-ctrl/ai-growth-operator`.
-- **Consequences:** Simpler CI and versioning; larger repo later; no cross-repo coordination.
+## ADR-002 — Arena branch, PRs to `main`, no merge without review
+**Status:** Accepted by user. Decision: develop on `arena/5dc98770-ai-growth-operator`; target `main`; never merge without approval.
 
-## ADR-002 — Arena-managed development branch, PRs to `main`
-- **Status:** Accepted by user authorization
-- **Context:** User approved temporary use of `arena/5dc98770-ai-growth-operator` while requiring isolation from `main`.
-- **Decision:** Develop only on that branch; open PRs targeting `main`; never merge without review and approval.
-- **Consequences:** Branch is temporary; final state must land via reviewed PR.
+## ADR-003 — Shared-schema multi-tenancy with RLS
+**Status:** Accepted, extended. Decision: every tenant-owned entity carries `tenant_id` and RLS with `USING`/`WITH CHECK`; app checks remain mandatory. System tables (users, FX, provider config) are admin-only.
 
-## ADR-003 — Shared-schema multi-tenancy with PostgreSQL RLS
-- **Status:** Proposed
-- **Context:** Need strong isolation without per-tenant DB overhead.
-- **Decision:** `tenant_id` on all tenant tables plus RLS with `app.current_tenant_id`; application checks remain mandatory.
-- **Consequences:** Strong defense in depth; requires disciplined transaction setup and RLS tests.
+## ADR-004 — FastAPI backend, responsive Next.js web
+**Status:** Accepted, corrected. Web is an **MVP** deliverable, not Phase 3-only. API/worker Python; web TypeScript.
 
-## ADR-004 — FastAPI backend, Next.js web client
-- **Status:** Proposed
-- **Context:** Need typed validation, generated OpenAPI, and a maintainable dashboard.
-- **Decision:** Python/FastAPI for API + worker; TypeScript/Next.js for web in later phase.
-- **Consequences:** Two runtimes, but standard and productive; no new framework experiments.
+## ADR-005 — Postgres-backed job queue
+**Status:** Amended by ADR-012. Original decision retained (no Redis for MVP), with mandatory hardening.
 
-## ADR-005 — Postgres-backed job queue, no Redis/Kafka
-- **Status:** Proposed
-- **Context:** AI generation is asynchronous but volume is initially low.
-- **Decision:** Use `ai_generation_jobs` with `FOR UPDATE SKIP LOCKED` and bounded concurrency.
-- **Consequences:** Fewer dependencies; queue not suitable for high throughput, revisit after pilot.
+## ADR-006 — Argon2id sessions with CSRF
+**Status:** Accepted. Revisit managed IdP only if PRD requires SSO/MFA.
 
-## ADR-006 — Application-managed session auth with Argon2id
-- **Status:** Proposed, revisit after PRD confirmation
-- **Context:** Need secure auth without an external identity vendor dependency.
-- **Decision:** Email/password, hashed with Argon2id, opaque sessions stored as hashes in Postgres, CSRF tokens on mutations.
-- **Consequences:** Full control and no vendor lock; team owns session security; revisit if SSO/MFA becomes required.
+## ADR-007 — Single provider adapter
+**Status:** Superseded by ADR-013. A single active provider is allowed, but the design is now a gateway, not a one-provider adapter.
 
-## ADR-007 — One LLM provider behind a thin adapter
-- **Status:** Proposed
-- **Context:** Avoid provider abstraction overhead while preserving future flexibility.
-- **Decision:** Define a small `ContentGenerator` protocol; implement one provider now; no user-facing provider selector.
-- **Consequences:** Low complexity; provider switch requires a small code change.
+## ADR-008 — Deferred billing, direct publishing, Android
+**Status:** Accepted, clarified. Billing, direct social publishing, and Android deferred. Responsive web is **not** deferred.
 
-## ADR-008 — Defer billing, publishing integrations, and mobile
-- **Status:** Proposed
-- **Context:** No confirmed PRD requirement and small initial scope.
-- **Decision:** Keep `plan` as metadata; draft-only workflow; web only.
-- **Consequences:** Faster pilot; monetization and channel expansion need future approval.
-
-## ADR-009 — French-first, Arabic-ready data model
-- **Status:** Proposed assumption (PRD confirmation required)
-- **Context:** Algerian SMB context suggests French/Arabic usage; no confirmed locale list.
-- **Decision:** Store `locale` on tenant and content; default `fr`; allow `ar`; do not build Darija UI yet.
-- **Consequences:** Avoids destructive schema change later; actual locale set may change after PRD review.
+## ADR-009 — French-first data model
+**Status:** **Superseded by ADR-011.** Recorded only to show the corrected assumption.
 
 ## ADR-010 — Documentation-only Phase 0
-- **Status:** Accepted
-- **Context:** User explicitly forbade application implementation.
-- **Decision:** Phase 0 changes are Markdown documentation only; no code, dependencies, or infra manifests.
-- **Consequences:** No runnable product yet; Phase 1 begins only after approval.
+**Status:** Accepted. No application code in Phase 0.
+
+## ADR-011 — Arabic-first product with Darija support
+**Status:** Accepted (audit correction). Context: approved product decision. Decision: UI default `ar`, `fr` secondary; copy locales `ar`, `ar-DZ`, `fr`; RTL-ready from first screen. Consequences: locale-aware prompts and tests; no French-only defaults. Supersedes ADR-009.
+
+## ADR-012 — Hardened Postgres queue + defined Celery migration path
+**Status:** Accepted (audit correction). Context: Redis not added for complexity. Decision: job table with `FOR UPDATE SKIP LOCKED`, leases, `run_at`, retries/backoff/jitter, idempotency, dead-letter, monitoring, concurrency 2. Migration: stable `JobDispatcher`, Celery+Redis behind it, outbox, shadow run. Consequences: low dependencies; measured scaling threshold required. Amends ADR-005.
+
+## ADR-013 — Provider-independent AI gateway
+**Status:** Accepted. Decision: `TextProvider` + `ImageProvider` protocols; `ai_provider_configs`/`ai_models` for model config, price, priority, fallback, residency; usage/cost records; rate limits; circuit breaker; policy-gated fallback. Consequences: no lock-in; more config surface but no provider-specific business columns. Supersedes ADR-007.
+
+## ADR-014 — Fail-closed approval and financial safety
+**Status:** Accepted. Decision: unified `approval_requests` + immutable `approval_snapshots` + `external_actions`/attempts; explicit approval for publish and ad activation; exact budget ceiling + FX snapshot; budget edits supersede approvals; no automatic increases; no external call on validation failure. Consequences: extra write path, strong auditability.
+
+## ADR-015 — Dual currency display with FX snapshots
+**Status:** Accepted. Decision: DZD base, DZD+USD display from `fx_rates` snapshots; approvals store native ceiling, USD display, snapshot ID; clients cannot submit rates. Consequences: FX source/rounding policy still open.
+
+## ADR-016 — Corrected MVP scope and deferrals
+**Status:** Accepted. Decision: MVP includes auth, organization, business profile, products, AI Studio, Arabic/Darija copy, creatives, calendar, approval center, basic landing pages, leads, usage limits, responsive web, dual currency. Deferred: Android, complex CRM, advanced optimization, multi-platform ads, advanced analytics, billing. Consequences: ad tables documented but not activated.

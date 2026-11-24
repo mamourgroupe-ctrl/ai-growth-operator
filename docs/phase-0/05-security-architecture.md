@@ -1,86 +1,69 @@
-# Phase 0 — Security Architecture
+# Phase 0 — Security Architecture (post-audit)
 
-**Status:** Proposed for approval. No security controls are implemented in Phase 0.
-**Threat model:** lightweight STRIDE review tailored to a multi-tenant SaaS with AI-generated text.
+**Status:** Corrected for approval. No controls implemented in Phase 0.
 
 ## 1. Trust boundaries
 
-1. Browser ↔ API (public network).
-2. API ↔ PostgreSQL (internal, but still guarded by RLS).
-3. Worker ↔ LLM provider (external processor of prompt text).
-4. CI/CD ↔ GitHub Secrets (deployment boundary).
+1. Browser ↔ API (public network; Arabic-first responsive client).
+2. API ↔ PostgreSQL (tenant context set per transaction; RLS enforced).
+3. AI Gateway ↔ text/image providers (external processing of prompts and brand context).
+4. Execution gate ↔ publishing/ad platforms (external side effects; deferred for ads).
+5. CI/CD ↔ GitHub Secrets.
 
-## 2. Threat model summary
+## 2. Authentication and sessions
 
-| Threat | Example | Primary control |
-|---|---|---|
-| Spoofing | Stolen session cookie, credential stuffing | HttpOnly/SameSite cookies, login rate limit, session rotation |
-| Tampering | CSRF on content approval | CSRF token on all mutations, strict content-type checks |
-| Repudiation | Unknown actor changed a campaign | Append-only audit log |
-| Information disclosure | Tenant A reads tenant B data | RLS + application membership checks + redacted logs |
-| Denial of service | Generation spam / huge prompts | Quotas, prompt size limits, provider timeout, bounded retries |
-| Elevation of privilege | Viewer edits content | RBAC enforcement at API layer, tests per role |
+- Argon2id password hashing; opaque session token stored as SHA-256 hash only.
+- Cookies: HttpOnly, Secure, SameSite=Lax; 14-day idle, 30-day absolute expiry; rotation on login.
+- CSRF token required on every mutation; login rate-limited per IP/email; no account enumeration.
+- MFA/SSO deferred; revisit if PRD requires.
 
-## 3. Authentication and sessions
-
-- Email + password with Argon2id hashing (encoded parameters, no plaintext or reversible storage).
-- Opaque random session token stored as SHA-256 hash in `sessions`; raw token only in the cookie.
-- Cookie attributes: `HttpOnly`, `Secure`, `SameSite=Lax`, path `/`, 14-day idle expiry, 30-day absolute expiry.
-- Rotate session id on login; revoke on logout and password change.
-- Login endpoint rate-limited per IP and per email; no account enumeration in responses.
-- MFA and managed IdP are explicitly deferred; revisit if PRD requires SSO or stricter assurance.
-
-## 4. Authorization
+## 3. Authorization matrix
 
 | Action | Owner | Editor | Viewer |
 |---|---|---|---|
-| View workspace/campaigns/content | yes | yes | yes |
-| Create/edit campaigns and content | yes | yes | no |
-| Approve content | yes | yes* | no |
-| Manage members/roles | yes | no | no |
-| Change tenant settings | yes | no | no |
+| View organization content, calendar, leads | yes | yes | yes |
+| Edit profile, products, content, creatives, landing pages | yes | yes | no |
+| Approve content/landing publish | yes | yes | no |
+| Approve ad activation or budget change | yes | no | no |
+| Manage members/settings | yes | no | no |
+| Change AI provider config | system admin only | no | no |
 
-\* Pending PRD confirmation; if approval must be owner-only, change the API check and tests before Phase 2.
+Every handler resolves `{org_id}` from the path, verifies membership and role, then applies RLS via `SET LOCAL app.current_tenant_id`.
 
-Every handler resolves the tenant from the URL, verifies membership, then checks role. RLS is applied via `SET LOCAL app.current_tenant_id`.
+## 4. Approval and financial safety (fail-closed)
 
-## 5. Data protection
+1. Two distinct approval kinds: publishing and advertising/budget. One never implies the other.
+2. Approval snapshots are append-only and hashed; approved data cannot be mutated in place. Edits bump `target_version`, supersede old approvals, and require new approval.
+3. Ad approvals require exact `ceiling_amount`, `ceiling_currency`, USD display amount, and FX snapshot. Missing any field → no approval created.
+4. Execution gate order: load approval → check status/expiry/superseded/version/hash → lock budget row → validate `spent + requested <= ceiling` → insert `external_actions` → provider call → append attempt log.
+5. No automatic budget increases. Increase requires a new approval with a new ceiling.
+6. Any validation failure stops before the external call: no publish, no spend.
+7. Audit trail: `approval_requests`, `approval_snapshots`, `external_actions`, `external_action_attempts`, `audit_logs`.
 
-- TLS everywhere; HSTS at the edge.
-- Managed Postgres with encryption at rest; daily backups + PITR.
-- No secrets or provider keys in the repository; GitHub Environments hold deploy secrets.
-- Logs are structured JSON with redaction: no passwords, tokens, cookie values, or full prompts.
-- Prompt text is stored only in `ai_generation_jobs` and cleaned on a schedule.
-- No production data in lower environments.
-- Data export and deletion workflows are Phase 3 candidates pending legal review.
+## 5. AI gateway security
 
-## 6. AI-specific controls
+- Provider allowlist in `ai_provider_configs`; no arbitrary provider URLs from tenant input.
+- Residency tags gate fallback: never fall back to a provider that violates policy.
+- Prompt injection: tenant briefs and brand text are untrusted, delimited, and cannot set system instructions; no tool execution.
+- Output validation for text and image metadata; safe error codes only; raw provider errors never returned.
+- Cost caps per model/tenant; usage and cost recorded in `ai_usage_records`.
+- Rate limits per tenant/provider/model; circuit breaker per provider.
 
-- Treat campaign names and briefs as untrusted input; delimit them in prompts and never grant tool access.
-- Validate model output against expected shape and length before persistence.
-- Strip obvious prompt-injection instructions from user-provided briefs where feasible; never let brief text define system instructions.
-- Single provider adapter with timeout, max tokens, and cost cap per request.
-- Provider receives only minimum necessary text; no tenant secrets or credentials.
-- Store provider/model name for traceability; never store provider API keys in DB.
+## 6. Data protection and isolation
 
-## 7. Application and supply-chain hygiene
+- Tenant-owned tables RLS-protected (see `03-database-design.md` §6). System tables admin-only.
+- TLS/HSTS; security headers (`CSP`, `nosniff`, `Referrer-Policy: no-referrer`).
+- Secrets only in GitHub Environments/host secret manager; no secrets in repo; rotate on exposure.
+- Logs redacted: no passwords, cookies, tokens, full prompts, or provider keys.
+- No production data in lower environments; encrypted backups with PITR and restore drill.
+- Data export/deletion workflows deferred with legal review.
 
-- Pydantic validation on all request bodies; reject unknown fields by default.
-- Parameterized SQL only via SQLAlchemy; no string-built queries.
-- Security headers: CSP (deny inline by default), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`.
-- `pip-audit`/Dependabot and SAST in CI; high-severity findings block merge.
-- Branch protection on `main`: required PR, required checks, no direct push, no auto-merge.
-- Production deploys require an environment approval; never merge without review.
+## 7. Supply chain and change control
 
-## 8. Incident response outline
+- Pydantic validation, parameterized SQL, dependency scanning, SAST, required review.
+- Branch protection on `main`; required checks; no auto-merge.
+- PR #15 remains draft and unmerged until product-owner approval.
 
-1. Detect via health checks/logs/error reports.
-2. Contain by revoking sessions/tokens or disabling a provider key.
-3. Assess using audit logs and request IDs.
-4. Eradicate via patch + deploy; restore from backup only if data integrity is affected.
-5. Notify affected tenants according to legal requirements (obligations to be confirmed).
-6. Record a post-incident action item in the backlog.
+## 8. Compliance note
 
-## 9. Compliance note
-
-No claim of compliance is made in Phase 0. Algerian data-protection, sector rules, and AI-provider data-residency obligations must be reviewed before pilot data is stored.
+No compliance claim. Algerian data-protection rules and provider residency obligations require review before pilot data. FX display policy (source, rounding) also requires business confirmation.
