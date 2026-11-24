@@ -1,130 +1,119 @@
-# Phase 0 — PostgreSQL Database Design (post-audit)
+# Phase 0 — PostgreSQL Database Design (final acceptance draft)
 
-**Status:** Corrected for approval. No migrations are created in Phase 0.
-**Target:** PostgreSQL 16. UUID IDs, `timestamptz` UTC, `numeric(14,2)` for money, check constraints over native enums.
+**Status:** Corrected for final approval. No migrations exist in Phase 0.
+**Target:** PostgreSQL 16. UUID IDs, `timestamptz` UTC, `numeric(14,2)` money, check constraints over native enums.
 **Tenant rule:** every tenant-owned table has `tenant_id uuid NOT NULL`, RLS enabled and forced.
 
-## 1. Tenant settings and localization
+## 1. Organization settings
 
-`tenants` (product name: Organization)
+`tenants` (product: Organization)
 
-| Column | Type | Notes |
+| Column | Type / default | Notes |
 |---|---|---|
-| id | uuid PK | |
-| name, slug | text, citext unique | |
-| base_currency | char(3) NOT NULL DEFAULT 'DZD' | Canonical money currency |
-| display_currencies | jsonb NOT NULL DEFAULT '["DZD","USD"]' | Both shown in UI |
-| default_ui_locale | text NOT NULL DEFAULT 'ar' | Arabic first |
-| supported_ui_locales | jsonb NOT NULL DEFAULT '["ar","fr"]' | |
-| default_content_locale | text NOT NULL DEFAULT 'ar-DZ' | Darija-aware copy |
-| timezone | text NOT NULL DEFAULT 'Africa/Algiers' | |
-| plan_code | text NOT NULL DEFAULT 'free' | From `subscriptions` |
+| id, name, slug | uuid PK, text, citext unique | |
+| base_currency | char(3) `DZD` | Canonical money |
+| display_currencies | jsonb `["DZD","USD"]` | Both displayed |
+| default_ui_locale | text `ar` | Arabic/RTL default |
+| supported_ui_locales | jsonb `["ar","fr"]` | Darija UI later, no schema change |
+| default_content_style | text `msa` | `msa`, `darija`, `fr` |
+| timezone | text `Africa/Algiers` | |
+| plan_code | text `free` | From `subscriptions` |
 | created_at/updated_at/deleted_at | timestamptz | |
 
-## 2. System tables (not tenant-owned)
+## 2. System tables (admin-only, no RLS)
 
 - `users`: id, email citext unique, password_hash, full_name, timestamps.
-- `sessions`: id, user_id, token_hash unique, expires_at, absolute_expires_at, revoked_at, created_at. No `tenant_id`; scoped by user and checked against memberships.
-- `fx_rates`: id, base_currency, quote_currency, rate numeric(18,8), effective_on date, source text, captured_at. Unique `(base_currency, quote_currency, effective_on, source)`. Admin/system write only.
-- `ai_provider_configs`: id, provider_code unique, display_name, enabled, priority, fallback_group, residency_tag, rate_limit_per_minute, cost_cap_daily, created_at/updated_at. Admin-only.
-- `ai_models`: id, provider_id, model_code, capability (`text`/`image`), enabled, unit_price_amount, unit_price_currency, max_tokens, supports_darija boolean, priority, unique `(provider_id, model_code)`. Admin-only.
+- `sessions`: id, user_id, token_hash unique, expires_at, absolute_expires_at, revoked_at, created_at.
+- `fx_rate_snapshots`: id, base_currency, quote_currency, rate numeric(18,8), source text, observed_at, captured_at, snapshot_hash text. **Immutable**: inserts only; no update/delete path. Unique hash. FX source is an unresolved configuration decision; source records where the rate came from once selected.
+- `ai_provider_configs`: provider_code unique, enabled, priority, fallback_group, residency_tag, rate_limit_per_minute, cost_cap_daily, timestamps.
+- `ai_models`: provider_id, model_code, capability (`text`/`image`), enabled, unit_price_amount/currency, max_tokens, supports_darija, priority; unique `(provider_id, model_code)`.
 
 ## 3. Tenant-owned MVP tables
 
 ### `tenant_memberships`
-PK `(tenant_id, user_id)`; columns `role` (`owner`,`editor`,`viewer`), `status` (`active`,`invited`,`suspended`), timestamps. Index on `user_id`.
+PK `(tenant_id, user_id)`; `role` (`owner`,`editor`,`viewer`), `is_arabic_reviewer boolean default false` (capability, not role; viewer never), `status`, timestamps. Index `(user_id)`.
 
 ### `business_profiles`
-`tenant_id` PK/FK, `name`, `sector`, `description`, `city`, `wilaya`, `address`, `phone`, `email`, `website`, `brand_voice`, `default_locale`, timestamps. One profile per tenant.
+tenant_id PK/FK, name, sector, description, city, wilaya, address, phone, email, website, brand_voice, default_content_style, timestamps.
 
 ### `brand_assets` (minimal)
-id, tenant_id, `kind` (`logo`,`color_palette`,`font`,`tone_guide`), `label`, `text_value`, `storage_ref`, `mime_type`, `created_by`, timestamps. No full DAM/versioning in MVP.
+id, tenant_id, kind (`logo`,`color_palette`,`font`,`tone_guide`), label, text_value, storage_ref, mime_type, created_by, timestamps. No full DAM/versioning.
 
 ### `products`
-id, tenant_id, `name`, `description`, `sku`, `price_amount`, `currency`, `status`, timestamps, `deleted_at`. Index `(tenant_id, status, name)`.
+id, tenant_id, name, description, sku, price_amount, currency, status, timestamps, deleted_at.
 
 ### `content_items`
-id, tenant_id, `kind` (`social_post`,`ad_copy`,`email_copy`,`landing_copy`), `locale` (`ar`,`ar-DZ`,`fr`), `body`, `status` (`draft`,`in_review`,`approved`,`scheduled`,`published`,`archived`), `source` (`ai`,`human`,`ai_edited`), `scheduled_for timestamptz`, `channel_target`, `generation_job_id`, `created_by`, timestamps, `deleted_at`.
-Indexes: `(tenant_id, scheduled_for)`, `(tenant_id, status)`, `(tenant_id, locale)`. The content calendar is a view over `scheduled_for`; no separate calendar table.
+id, tenant_id, kind (`social_post`,`ad_copy`,`email_copy`,`landing_copy`), `locale` (`ar`,`ar-DZ`,`fr`), `style` (`msa`,`darija`,`fr`), body, status (`draft`,`in_review`,`arabic_review`,`ready_for_approval`,`approved`,`scheduled`,`published`,`archived`), source (`ai`,`human`,`ai_edited`), scheduled_for, channel_target, generation_job_id, created_by, timestamps, deleted_at.
+Indexes `(tenant_id, scheduled_for)`, `(tenant_id, status)`, `(tenant_id, locale, style)`. Calendar = view over `scheduled_for`.
+
+### `arabic_reviews`
+id, tenant_id, content_item_id, reviewer_user_id, `locale`/`style`, `status` (`pending`,`approved`,`changes_requested`), notes, reviewed_at, created_at. Only rows with `status='approved'` allow content to be submitted for owner approval. Reviewer must be editor with `is_arabic_reviewer=true`.
 
 ### `creative_assets`
-id, tenant_id, `content_item_id` nullable, `kind` (`image`,`poster`), `storage_ref`, `prompt`, `provider`, `model`, `status`, `created_by`, timestamps. Supports creative generation without binary blobs in the DB.
+id, tenant_id, content_item_id nullable, kind (`image`,`poster`), storage_ref, prompt, provider, model, status, created_by, timestamps.
 
 ### `ai_generation_jobs`
-id, tenant_id, requested_by, `capability` (`text`,`image`), `kind`, `locale`, `prompt`, `status` (`queued`,`running`,`succeeded`,`failed`,`dead_letter`,`cancelled`), `run_at`, `attempt_count`, `max_attempts` default 3, `next_retry_at`, `locked_by`, `locked_at`, `heartbeat_at`, `provider`, `model`, `provider_request_id`, `idempotency_key`, `result_ref`, `error_code`, timestamps.
-Constraints: `UNIQUE (tenant_id, idempotency_key)`, `attempt_count <= max_attempts`.
-Indexes: partial on `status='queued' AND run_at <= now()`, `(tenant_id, status, created_at DESC)`.
+id, tenant_id, requested_by, capability (`text`,`image`), kind, locale, style, prompt, status (`queued`,`running`,`succeeded`,`failed`,`dead_letter`,`cancelled`), run_at, attempt_count, max_attempts=3, next_retry_at, locked_by, locked_at, heartbeat_at, provider, model, provider_request_id, idempotency_key, result_ref, error_code, timestamps. Unique `(tenant_id, idempotency_key)`.
 
-### `ai_usage_records`
-id, tenant_id, job_id, `capability`, provider, model, `tokens_in`, `tokens_out`, `images`, `unit_price_amount`, `unit_price_currency`, `computed_cost_amount`, `cost_currency`, `request_id`, created_at. Index `(tenant_id, created_at DESC)`. Price snapshot stored per record.
-
-### `subscriptions` (lite)
-tenant_id PK/FK, `plan_code`, `status`, `current_period_start`, `current_period_end`, `generation_limit`, `image_limit`, `overrides jsonb`, timestamps. No payment/billing integration.
-
-### `usage_counters`
-PK `(tenant_id, period_start)`, `generations_used`, `images_used`, `updated_at`. Atomic increment with job creation.
+### `ai_usage_records`, `subscriptions`, `usage_counters`
+As previously defined: usage/cost snapshots, plan quotas, atomic counters. No billing.
 
 ### `approval_requests`
-id, tenant_id, `kind` (`content_publish`,`ad_activation`,`ad_budget_change`,`landing_page_publish`), `target_type`, `target_id`, `target_version`, `payload_hash`, `snapshot_id`, requested_by, `status` (`pending`,`approved`,`rejected`,`expired`,`revoked`,`superseded`), decided_by, decided_at, `valid_until`, `budget_ceiling_amount`, `budget_ceiling_currency`, `budget_ceiling_usd_amount`, `fx_rate_snapshot_id`, `superseded_by`, `idempotency_key`, created_at/updated_at.
-Constraints: `UNIQUE (tenant_id, idempotency_key)`; check that ad kinds have non-null ceiling and FX snapshot.
-Indexes: `(tenant_id, status, kind, created_at DESC)`.
+id, tenant_id, kind (`content_publish`,`landing_page_publish`,`ad_activation`,`ad_budget_change`,`social_publish`), target_type, target_id, target_version, payload_hash, snapshot_id, requested_by, `decided_by` (must be owner), status (`pending`,`approved`,`rejected`,`expired`,`revoked`,`superseded`), decided_at, valid_until, budget_ceiling_amount, budget_ceiling_currency, budget_ceiling_usd_amount, `fx_rate_snapshot_id`, superseded_by, idempotency_key, timestamps.
+Constraints: unique `(tenant_id, idempotency_key)`; ad kinds require ceiling + FX snapshot; `decided_by` must have owner role at decision time (service + trigger guard).
 
 ### `approval_snapshots`
-id, tenant_id, approval_request_id, `version`, `payload jsonb`, `hash text`, created_at. Append-only; `UNIQUE (approval_request_id, version)`. No update path; new edits create a new version and a new approval request.
+id, tenant_id, approval_request_id, version, payload jsonb, hash text, created_at. Append-only; unique `(approval_request_id, version)`.
 
 ### `external_actions`
-id, tenant_id, `approval_request_id` UNIQUE, `kind`, `status` (`pending`,`executed`,`failed`,`blocked`), `target_type`, `target_id`, `provider_ref`, `requested_amount`, `requested_currency`, `requested_usd_amount`, `fx_rate_snapshot_id`, created_by, executed_by, executed_at, `last_error_code`.
+id, tenant_id, approval_request_id unique, kind, `state` (`created`,`authorized`,`queued`,`dispatching`,`uncertain`,`reconciled_executed`,`reconciled_failed`,`executed`,`failed`,`dead_letter`,`blocked`,`cancelled`), target_type, target_id, `provider_idempotency_key` unique (derived from action ID + approval version; reused on every retry), provider_ref, requested_amount, requested_currency, requested_usd_amount, fx_rate_snapshot_id, created_by, executed_by, executed_at, last_error_code, timestamps.
 
 ### `external_action_attempts`
-id, tenant_id, external_action_id, `attempt_no`, `status`, `provider`, `provider_request_ref`, `error_code`, created_at. Immutable provider-call log.
+id, tenant_id, external_action_id, attempt_no, status, provider, provider_request_ref, provider_idempotency_key, error_code, created_at. Immutable.
 
-### `landing_pages`
-id, tenant_id, `slug`, `title`, `blocks jsonb`, `status` (`draft`,`in_review`,`published`,`archived`), `published_at`, `created_by`, timestamps, `deleted_at`. Unique `(tenant_id, slug)`. Publish requires approval request.
+### `outbox_events`
+id, tenant_id, aggregate_type (`external_action`), aggregate_id, event_type, payload jsonb, status (`pending`,`published`,`failed`,`dead`), available_at, attempts, locked_by, locked_at, created_at. Inserted in the **same transaction** as the authorized action. Dispatcher publishes without creating new side effects; replay with same aggregate_id/idempotency key is a no-op.
 
-### `leads`
-id, tenant_id, `landing_page_id` nullable, `name`, `phone`, `email`, `notes`, `source`, `status` (`new`,`contacted`,`qualified`,`archived`), timestamps, `deleted_at`. Index `(tenant_id, created_at DESC)`.
+### `landing_pages`, `leads`, `audit_logs`
+As previously defined. `audit_logs` additionally records approval_request_id, external_action_id, request_id, outbox_event_id, reconciliation run id.
 
-### `audit_logs`
-id bigserial, tenant_id nullable, actor_user_id, `action`, `target_type`, `target_id`, `approval_request_id`, `external_action_id`, `request_id`, `metadata jsonb`, created_at. Append-only; global auth events use null tenant_id.
+## 4. Deferred extension points (documented, not in baseline migration)
 
-## 4. Deferred tables (documented, excluded from Phase 1 migration)
-
-| Table | Columns (summary) | Rationale for deferral |
+| Table | Summary | Why deferred |
 |---|---|---|
-| `social_connections` | tenant_id, platform, account_ref, encrypted_token_ref, scopes, status | Direct publishing deferred |
-| `ad_accounts` | tenant_id, platform, external_account_id, currency, status | Multi-platform ad automation deferred |
+| `social_connections` | tenant_id, platform, account_ref, encrypted_token_ref, scopes, status | Direct social publishing outside MVP |
+| `ad_accounts` | tenant_id, platform, external_account_id, currency, status | Paid ad execution outside MVP |
 | `ad_campaigns` | tenant_id, ad_account_id, external_campaign_id, name, status | Same |
-| `ad_budget_limits` | tenant_id, ad_campaign_id, ceiling_amount, currency, ceiling_usd_amount, fx_snapshot_id, version, superseded_at, approval_request_id, spent_amount | Safety schema designed now; execution later |
-| `spend_events` | tenant_id, budget_limit_id, amount, currency, fx_snapshot_id, provider_ref, created_at | Spend ledger activated with ad execution |
+| `ad_budget_limits` | tenant_id, campaign_id, ceiling_amount, currency, ceiling_usd_amount, fx_rate_snapshot_id, version, superseded_at, approval_request_id, spent_amount | Safety contract fixed now |
+| `spend_events` | tenant_id, budget_limit_id, amount, currency, fx_rate_snapshot_id, provider_ref, created_at | Activated with ad execution |
 
-These tables reuse the approval model already defined, so later activation cannot bypass ceilings.
+They reuse `approval_requests`, `external_actions`, outbox, idempotency, and reconciliation; later activation cannot bypass ceilings.
 
-## 5. Entity evaluation (explicit)
+## 5. Explicit entity evaluation
 
 | Requested entity | Verdict | Note |
 |---|---|---|
 | business_profiles | MVP | Included |
 | products | MVP | Included |
-| brand_assets | MVP minimal | Included; no versioning/DAM |
-| content_approvals | MVP via `approval_requests` | Unified table covers content + other targets |
-| social_connections | Deferred | Publishing deferred |
-| landing_pages | MVP basic | Included; approval-gated |
+| brand_assets | MVP minimal | Included; no DAM/versioning |
+| content_approvals | MVP via `approval_requests` | Unified with publish/ad targets |
+| social_connections | Deferred extension | Not implemented |
+| landing_pages | MVP basic | Approval-gated |
 | leads | MVP | Included |
-| ad_accounts | Deferred | Schema reserved |
-| ad_campaigns | Deferred | Schema reserved |
-| ad_budget_limits | Deferred | Schema reserved; safety contract fixed |
+| ad_accounts / ad_campaigns / ad_budget_limits | Deferred extension | Schema reserved |
 | ai_provider_configs | MVP system table | Not tenant-owned |
 | ai_usage_records | MVP | Included |
 | subscriptions | MVP-lite | Quota state only |
-| audit_logs | MVP | Included |
+| audit_logs | MVP | Append-only |
+| Additional MVP: `arabic_reviews`, `outbox_events`, `fx_rate_snapshots`, `creative_assets` | MVP/system | Required by final corrections |
 
 ## 6. Tenant isolation matrix
 
-| Tenant-owned (RLS) | System (admin-only, no RLS) |
+| Tenant-owned (RLS) | System (admin-only) |
 |---|---|
-| tenants, tenant_memberships, business_profiles, brand_assets, products, content_items, creative_assets, ai_generation_jobs, ai_usage_records, usage_counters, subscriptions, approval_requests, approval_snapshots, external_actions, external_action_attempts, landing_pages, leads, audit_logs (tenant rows) | users, sessions, fx_rates, ai_provider_configs, ai_models |
+| tenants, tenant_memberships, business_profiles, brand_assets, products, content_items, arabic_reviews, creative_assets, ai_generation_jobs, ai_usage_records, usage_counters, subscriptions, approval_requests, approval_snapshots, external_actions, external_action_attempts, outbox_events, landing_pages, leads, audit_logs (tenant rows) | users, sessions, fx_rate_snapshots, ai_provider_configs, ai_models |
 
-RLS policy applied to every tenant-owned table:
+RLS policy on every tenant-owned table:
 
 ```sql
 ALTER TABLE <table> ENABLE ROW LEVEL SECURITY;
@@ -134,12 +123,11 @@ CREATE POLICY tenant_isolation ON <table>
   WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
 ```
 
-Application sets `SET LOCAL app.current_tenant_id` per transaction and still verifies membership/role. Migration roles bypass explicitly. Tests must prove cross-tenant denial.
+App sets `SET LOCAL app.current_tenant_id` per transaction and still checks membership/role. Migration roles bypass explicitly. Tests prove cross-tenant denial.
 
-## 7. Migration and lifecycle
+## 7. Lifecycle
 
-- Phase 1 baseline creates only Section 2/3 tables plus RLS; deferred tables are documented, not created.
+- Phase 1 baseline creates system + MVP tables only; deferred tables excluded.
 - Expand-then-contract; tested downgrade; no destructive drop in a forward release.
-- Approval snapshots and provider prompts retained 30 days by default; audit logs longer (policy pending).
-- Backups with PITR; restore drill before pilot.
-- No production data in lower environments.
+- `fx_rate_snapshots` and `approval_snapshots` immutable; audit/outbox retained per policy (pending).
+- Daily backups + PITR; restore drill before pilot; no production data in lower environments.

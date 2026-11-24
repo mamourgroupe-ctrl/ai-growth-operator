@@ -1,69 +1,60 @@
-# Phase 0 — Security Architecture (post-audit)
+# Phase 0 — Security Architecture (final acceptance draft)
 
-**Status:** Corrected for approval. No controls implemented in Phase 0.
+**Status:** Corrected for final approval. No controls implemented in Phase 0.
 
 ## 1. Trust boundaries
 
-1. Browser ↔ API (public network; Arabic-first responsive client).
-2. API ↔ PostgreSQL (tenant context set per transaction; RLS enforced).
-3. AI Gateway ↔ text/image providers (external processing of prompts and brand context).
-4. Execution gate ↔ publishing/ad platforms (external side effects; deferred for ads).
-5. CI/CD ↔ GitHub Secrets.
+Browser ↔ API; API ↔ PostgreSQL (RLS + tenant context); AI Gateway ↔ providers; execution dispatcher ↔ external platforms (deferred for social/ads); CI/CD ↔ GitHub Secrets.
 
-## 2. Authentication and sessions
+## 2. Authentication
 
-- Argon2id password hashing; opaque session token stored as SHA-256 hash only.
-- Cookies: HttpOnly, Secure, SameSite=Lax; 14-day idle, 30-day absolute expiry; rotation on login.
-- CSRF token required on every mutation; login rate-limited per IP/email; no account enumeration.
-- MFA/SSO deferred; revisit if PRD requires.
+Argon2id passwords; opaque session token stored only as SHA-256 hash; HttpOnly/Secure/SameSite=Lax cookies; idle 14d / absolute 30d; rotation on login; CSRF token on every mutation; login rate limit; no account enumeration. MFA/SSO deferred.
 
-## 3. Authorization matrix
+## 3. RBAC and approval bypass prevention
 
-| Action | Owner | Editor | Viewer |
+| Action | Owner | Editor (incl. Arabic reviewer) | Viewer |
 |---|---|---|---|
-| View organization content, calendar, leads | yes | yes | yes |
-| Edit profile, products, content, creatives, landing pages | yes | yes | no |
-| Approve content/landing publish | yes | yes | no |
-| Approve ad activation or budget change | yes | no | no |
+| Read organization data | yes | yes | yes |
+| Prepare content/products/landing pages | yes | yes | no |
+| Submit for Arabic review / submit for approval | yes | yes | no |
+| Decide Arabic quality review | yes | yes if `is_arabic_reviewer` | no |
+| **Final approval of any request** | **yes (only)** | **no** | no |
+| Trigger publish/execute after approval | yes | yes | no |
 | Manage members/settings | yes | no | no |
-| Change AI provider config | system admin only | no | no |
+| Configure AI providers / FX snapshots | system admin | no | no |
 
-Every handler resolves `{org_id}` from the path, verifies membership and role, then applies RLS via `SET LOCAL app.current_tenant_id`.
+Enforcement:
+- Central authorization dependency on every route; role is read from DB membership in the same tenant context, never from client payload/token claim.
+- `/approvals/{id}/decide` hard-checks `role='owner'`. Forged `approval_id`, UI-hidden buttons, or direct API calls cannot grant approval authority.
+- Publish/execute handlers independently re-validate approval status, owner decision, version, hash, expiry, Arabic review, and tenant match before writing an outbox row.
+- RLS is a second boundary; viewer cross-tenant or cross-role attempts return `403`/`404`.
 
-## 4. Approval and financial safety (fail-closed)
+## 4. Approval and financial safety
 
-1. Two distinct approval kinds: publishing and advertising/budget. One never implies the other.
-2. Approval snapshots are append-only and hashed; approved data cannot be mutated in place. Edits bump `target_version`, supersede old approvals, and require new approval.
-3. Ad approvals require exact `ceiling_amount`, `ceiling_currency`, USD display amount, and FX snapshot. Missing any field → no approval created.
-4. Execution gate order: load approval → check status/expiry/superseded/version/hash → lock budget row → validate `spent + requested <= ceiling` → insert `external_actions` → provider call → append attempt log.
-5. No automatic budget increases. Increase requires a new approval with a new ceiling.
-6. Any validation failure stops before the external call: no publish, no spend.
-7. Audit trail: `approval_requests`, `approval_snapshots`, `external_actions`, `external_action_attempts`, `audit_logs`.
+- Distinct approval kinds; budget changes/content edits supersede prior approvals; snapshots immutable and hashed.
+- Exact ceiling + immutable FX snapshot required for any ad-kind approval (deferred execution, contract fixed).
+- Transactional outbox ensures the action intent and approval authorization commit together; no external call before commit.
+- Deterministic provider idempotency key stored per `external_actions` row and reused across retries; replay is a no-op.
+- State machine includes `uncertain`: on ambiguous provider result, automatic retry is forbidden; reconciliation resolves using provider idempotency key/reference.
+- No automatic budget increases; `spent + requested <= ceiling` checked under row lock before dispatch.
+- Every attempt, decision, outbox publish, and reconciliation result is appended to immutable logs.
 
-## 5. AI gateway security
+## 5. Arabic quality control
 
-- Provider allowlist in `ai_provider_configs`; no arbitrary provider URLs from tenant input.
-- Residency tags gate fallback: never fall back to a provider that violates policy.
-- Prompt injection: tenant briefs and brand text are untrusted, delimited, and cannot set system instructions; no tool execution.
-- Output validation for text and image metadata; safe error codes only; raw provider errors never returned.
-- Cost caps per model/tenant; usage and cost recorded in `ai_usage_records`.
-- Rate limits per tenant/provider/model; circuit breaker per provider.
+`ar`/`ar-DZ` content cannot enter approval until an `arabic_reviews` row is `approved` by a flagged editor reviewer. Review covers MSA grammar, Darija authenticity, brand voice, cultural fit, and factual claims. Reviewer identity and notes are audited. Viewer can never review.
 
-## 6. Data protection and isolation
+## 6. AI gateway security
 
-- Tenant-owned tables RLS-protected (see `03-database-design.md` §6). System tables admin-only.
-- TLS/HSTS; security headers (`CSP`, `nosniff`, `Referrer-Policy: no-referrer`).
-- Secrets only in GitHub Environments/host secret manager; no secrets in repo; rotate on exposure.
-- Logs redacted: no passwords, cookies, tokens, full prompts, or provider keys.
-- No production data in lower environments; encrypted backups with PITR and restore drill.
-- Data export/deletion workflows deferred with legal review.
+Provider allowlist; residency-gated fallback; prompts/brands treated as untrusted; no tool execution; output validation; safe error codes; cost caps and rate limits; usage/cost recorded. No client-chosen provider URLs.
 
-## 7. Supply chain and change control
+## 7. Data protection and operations
 
-- Pydantic validation, parameterized SQL, dependency scanning, SAST, required review.
-- Branch protection on `main`; required checks; no auto-merge.
-- PR #15 remains draft and unmerged until product-owner approval.
+TLS/HSTS; CSP/no-sniff/referrer headers; redacted logs (no secrets, tokens, full prompts); secrets only in GitHub Environments; encrypted backups with PITR and restore drill; no production data in lower environments. FX source remains an unresolved configuration decision and must be selected before financial approvals are activated.
 
-## 8. Compliance note
+## 8. Supply chain
 
-No compliance claim. Algerian data-protection rules and provider residency obligations require review before pilot data. FX display policy (source, rounding) also requires business confirmation.
+Pydantic validation, parameterized SQL, dependency scanning, SAST, required review, branch protection on `main`, no auto-merge. PR #15 remains draft and unmerged.
+
+## 9. Compliance
+
+No compliance claim. Algerian data-protection and provider residency review required before pilot.

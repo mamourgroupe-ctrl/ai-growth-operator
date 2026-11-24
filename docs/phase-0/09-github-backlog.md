@@ -1,7 +1,7 @@
-# Phase 0 — GitHub Development Backlog (post-audit)
+# Phase 0 — GitHub Development Backlog (final acceptance draft)
 
 **Status:** Corrected backlog in `mamourgroupe-ctrl/ai-growth-operator`.
-**Rule:** No implementation issue starts until #1 is closed by explicit product-owner approval of the corrected Phase 0 docs. PR #15 stays draft; no merge without review.
+**Rule:** No implementation issue starts until #1 is closed by explicit product-owner approval. PR #15 stays draft; no merge without review.
 
 ## Gate
 
@@ -9,7 +9,7 @@
 |---|---|---|
 | [#1](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/1) | [Audit] Confirm corrected PRD and close approval gate | — |
 
-Closes when Arabic-first/Darija, DZD+USD, approval model, responsive web MVP, and Android deferral are explicitly approved.
+Closes when Arabic default + Darija style + human review, DZD/USD with unresolved FX source, owner-only approval, outbox/reconciliation, responsive web MVP, Android deferral, and social/ad deferral are explicitly approved.
 
 ## Phase 1 — Foundation
 
@@ -20,10 +20,8 @@ Closes when Arabic-first/Darija, DZD+USD, approval model, responsive web MVP, an
 | [#3](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/3) | Add Alembic baseline and RLS policies | #1, #2 |
 | [#6](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/6) | Publish OpenAPI contract and error format | #2 |
 | [#4](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/4) | Implement auth, sessions, and CSRF | #2, #3 |
-| [#5](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/5) | Implement tenant membership and RBAC | #4 |
-| [#7](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/7) | Add tenant-isolation and approval security tests | #3, #5 |
-
-**Exit:** register → create organization → RLS denial test passes → CI green.
+| [#5](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/5) | Implement owner-only RBAC and membership | #4 |
+| [#7](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/7) | Add tenant isolation and approval-bypass tests | #3, #5 |
 
 ## Phase 2 — Business core + AI Studio
 
@@ -34,32 +32,31 @@ Closes when Arabic-first/Darija, DZD+USD, approval model, responsive web MVP, an
 | [#9](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/9) | Provider-independent AI gateway | #3, #6 |
 | [#18](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/18) | AI model config, usage, and cost tracking | #9 |
 | [#8](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/8) | Content studio APIs | #5, #6 |
+| [#27](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/27) | Human Arabic quality review | #5, #8 |
 | [#19](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/19) | Creative assets and content calendar | #8, #9 |
 | [#20](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/20) | Harden Postgres job queue | #3, #9 |
 | [#21](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/21) | AI usage limits from subscriptions | #9 |
-| [#22](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/22) | FX snapshots and dual DZD/USD display | #3 |
+| [#22](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/22) | Immutable FX snapshots and dual display | #3 |
 
-**Exit:** Arabic/Darija copy + creative generated, tracked, limited, displayed in both currencies.
-
-## Phase 3 — Approval center + web MVP
+## Phase 3 — Approval + web MVP
 
 | Issue | Title | Depends on |
 |---|---|---|
-| [#23](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/23) | Approval center and fail-closed action gate | #7, #22 |
+| [#23](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/23) | Owner-only approval center and fail-closed gate | #7, #22, #27 |
+| [#26](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/26) | Transactional outbox, idempotency, and reconciliation | #3, #7, #23 |
 | [#24](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/24) | Basic landing pages and leads | #3, #5, #23 |
 | [#12](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/12) | Responsive web MVP screens and navigation | Phase 2, #23, #24 |
-| [#25](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/25) | Arabic RTL and dual-currency UI layer | #12, #22 |
+| [#25](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/25) | Arabic RTL, Darija style, dual-currency UI | #12, #22, #27 |
 | [#13](https://github.com/mamourgroupe-ctrl/ai-growth-operator/issues/13) | Staging/production deployment and backups | #2, #14 |
 
-**Exit:** no external publish without approval; Arabic-first pilot workflow verified.
+## Deferred — no issue scheduled
 
-## Explicitly deferred — no issue scheduled
+Android; complex CRM; advanced optimization; multi-platform ad automation; paid ad execution; direct social publishing; advanced analytics; billing. Extension points are documented but not activated.
 
-Android app; complex CRM; advanced automated campaign optimization; multi-platform advertising automation; advanced analytics; billing; direct social publishing. Ad/social tables are documented but not activated.
+## Support items
 
-## Backlog hygiene
+#10 (usage/rate-limit/audit logging) and #11 (basic usage/metrics view) remain Phase 2 support issues.
 
-- One issue = one reviewable outcome with acceptance criteria.
-- New scope requires a PRD decision and a new issue.
-- Issues are not auto-closed by merges.
-- #10 (usage/rate-limit/audit log) and #11 (basic usage/metrics view) remain Phase 2 support items alongside the table above.
+## Hygiene
+
+One reviewable outcome per issue; no auto-close on merge; new scope requires PRD decision + new issue.

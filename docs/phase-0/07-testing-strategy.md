@@ -1,49 +1,43 @@
-# Phase 0 — Testing Strategy (post-audit)
+# Phase 0 — Testing Strategy (final acceptance draft)
 
-**Status:** Corrected for approval. No tests created in Phase 0.
+**Status:** Corrected for final approval. No tests created in Phase 0.
 
-## 1. Test pyramid
+## 1. Test layers
 
 | Layer | Scope | Gate |
 |---|---|---|
-| Unit | Domain rules, locale handling, FX display math, backoff calculation, quota math | Required Phase 1 |
-| Integration | API + real Postgres, migrations, RLS, auth, approval flow | Required Phase 1 |
-| Contract | OpenAPI schema and examples (`ar`, `ar-DZ`, `fr`, dual money display) | Required Phase 1 |
-| Security | Tenant isolation, RBAC, CSRF, fail-closed external actions | Required Phase 1 |
-| AI gateway | Fake text/image providers, price snapshot, fallback, rate limits | Required Phase 2 |
-| Job queue | Claim concurrency, retry/backoff, scheduling, idempotency, dead-letter | Required Phase 2 |
-| E2E smoke | Arabic UI → generate → approve → publish-ready → lead capture | Required Phase 3 |
-| Performance | Light load, queue depth behavior | Manual pre-pilot |
+| Unit | locale/style rules, backoff math, quotas, FX display math, idempotency key derivation | Phase 1 |
+| Integration | API + real Postgres, migrations, RLS, auth, approval, outbox atomicity | Phase 1 |
+| Contract | OpenAPI examples for `ar`/`ar-DZ`/`fr`, dual money display, 501 deferred routes | Phase 1 |
+| Security | Tenant isolation, owner-only approval, bypass attempts, CSRF | Phase 1 |
+| AI gateway | Fake text/image providers, price snapshots, fallback, rate limits | Phase 2 |
+| Job queue | Concurrent claim, retry/backoff, scheduling, dead-letter, monitoring counters | Phase 2 |
+| Execution safety | Outbox replay, idempotency, state machine `uncertain`, reconciliation | Phase 3 |
+| E2E smoke | Arabic UI → generate → Arabic review → owner approval → publish-ready → lead | Phase 3 |
 
-## 2. Non-negotiable test cases
+## 2. Non-negotiable cases
 
-1. Tenant A cannot read/mutate tenant B resources by ID guessing.
-2. RLS returns no tenant rows without `app.current_tenant_id`.
-3. Viewer blocked on editor/owner endpoints; only owner can approve ad spend.
-4. Mutation without CSRF token rejected.
-5. Publish/ad activation without `approval_id` returns error and makes **no** provider call.
-6. Approval with wrong version, expired, superseded, or hash mismatch is rejected.
-7. Budget change marks previous approvals `superseded`; old approval cannot execute.
-8. Ad spend blocked when approval missing, ceiling missing, FX snapshot missing, or `spent + requested > ceiling`.
-9. No automatic budget increase: spend ledger cannot write a positive ceiling delta without a new approval.
-10. Idempotency: duplicate generation key returns same job; different payload → `409`.
-11. Job claim concurrency: two workers never claim the same row (`SKIP LOCKED` test).
-12. Backoff follows `min(30s * 2^(n-1), 15m) + jitter`; max attempts enforced; dead-letter after exhaustion.
-13. AI output malformed → `failed` with safe error code; no raw provider message leaked.
-14. Fallback blocked when residency policy forbids target provider.
-15. Money display shows both DZD and USD from a snapshot; client cannot submit FX rate.
-16. Arabic/Darija copy stored with correct locale; RTL UI smoke passes.
+1. Tenant A cannot read/mutate tenant B by ID guessing.
+2. RLS returns no rows without `app.current_tenant_id`.
+3. Viewer blocked on all mutations; **editor calling `/approvals/{id}/decide` gets 403**; only owner decides.
+4. Forged `approval_id`, wrong tenant, expired/superseded approval, or hash mismatch → no outbox row, no provider call.
+5. Publish/execute without owner approval → blocked.
+6. Budget change supersedes prior approval; no automatic increase; `spent + requested > ceiling` blocks before dispatch.
+7. Outbox row committed in same transaction as authorized action; dispatcher replay with same aggregate/idempotency is a no-op.
+8. Provider idempotency key stable across retries; duplicate provider call prevented.
+9. Timeout with unknown provider result → state `uncertain`, **no automatic retry**, reconciliation required.
+10. Reconciliation resolves `uncertain` to executed/failed with evidence; duplicates raise incident and freeze tenant execution.
+11. Arabic `ar`/`ar-DZ` content without approved `arabic_reviews` cannot be submitted for approval.
+12. Reviewer flag cannot be set by editor; viewer never reviewer.
+13. Darija style stored distinctly from MSA and French; RTL smoke passes.
+14. FX snapshots immutable; no update/delete path; approval references snapshot; client-submitted rate rejected.
+15. Idempotency duplicate generation key returns same job; differing payload `409`.
+16. Malformed AI output safe-coded; fallback blocked by residency policy.
 
 ## 3. Data and CI
 
-- Deterministic factories; no production data; frozen clock for time tests.
-- No live provider calls in CI; fake text/image adapters.
-- Coverage ≥80% Phase 1; 100% branch coverage on approval/budget gate.
-- `ruff`, `mypy`, Alembic head check, dependency audit required before merge.
+Deterministic factories, frozen clock, no live provider calls in CI. Coverage ≥80% Phase 1; 100% branch coverage on approval/execution gate. `ruff`, `mypy`, Alembic head check, dependency audit required before merge.
 
-## 4. Manual pre-pilot checks
+## 4. Manual pre-pilot
 
-- Restore backup into scratch DB and verify counts.
-- Review audit redaction with sample payload.
-- Verify provider cost caps and queue thresholds under bounded load.
-- Confirm branch protection and required checks active.
+Restore drill; audit redaction review; provider cost caps; queue threshold observation; reconciliation dry-run with fake provider; branch protection verification.

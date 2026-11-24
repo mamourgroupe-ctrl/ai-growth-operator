@@ -1,51 +1,60 @@
-# Phase 0 — Architecture Decision Log (post-audit)
+# Phase 0 — Architecture Decision Log (final acceptance draft)
 
-Superseded decisions remain for traceability; a superseding ADR always wins.
+Superseded/amended decisions remain for traceability; the latest status wins.
 
 ## ADR-001 — Single private repository / monorepo
-**Status:** Accepted. Context: shared contracts. Decision: all work in `ai-growth-operator`. Consequence: simple CI; larger repo later.
+**Accepted.** All work stays in `ai-growth-operator`.
 
 ## ADR-002 — Arena branch, PRs to `main`, no merge without review
-**Status:** Accepted by user. Decision: develop on `arena/5dc98770-ai-growth-operator`; target `main`; never merge without approval.
+**Accepted by user.** Develop on `arena/5dc98770-ai-growth-operator`; target `main`; never merge without approval.
 
 ## ADR-003 — Shared-schema multi-tenancy with RLS
-**Status:** Accepted, extended. Decision: every tenant-owned entity carries `tenant_id` and RLS with `USING`/`WITH CHECK`; app checks remain mandatory. System tables (users, FX, provider config) are admin-only.
+**Accepted, extended.** Every tenant-owned entity has `tenant_id` + RLS `USING`/`WITH CHECK`; app membership/role checks remain mandatory. System tables admin-only.
 
 ## ADR-004 — FastAPI backend, responsive Next.js web
-**Status:** Accepted, corrected. Web is an **MVP** deliverable, not Phase 3-only. API/worker Python; web TypeScript.
+**Accepted, corrected.** Web is MVP, not deferred.
 
 ## ADR-005 — Postgres-backed job queue
-**Status:** Amended by ADR-012. Original decision retained (no Redis for MVP), with mandatory hardening.
+**Amended by ADR-012.** No Redis for MVP.
 
 ## ADR-006 — Argon2id sessions with CSRF
-**Status:** Accepted. Revisit managed IdP only if PRD requires SSO/MFA.
+**Accepted.** Managed IdP only if PRD later requires SSO/MFA.
 
 ## ADR-007 — Single provider adapter
-**Status:** Superseded by ADR-013. A single active provider is allowed, but the design is now a gateway, not a one-provider adapter.
+**Superseded by ADR-013.** A gateway replaces the narrow adapter.
 
-## ADR-008 — Deferred billing, direct publishing, Android
-**Status:** Accepted, clarified. Billing, direct social publishing, and Android deferred. Responsive web is **not** deferred.
+## ADR-008 — Deferred billing and Android
+**Accepted, clarified.** Billing and Android deferred; direct social publishing and paid ad execution also deferred (see ADR-016). Web is not deferred.
 
 ## ADR-009 — French-first data model
-**Status:** **Superseded by ADR-011.** Recorded only to show the corrected assumption.
+**Superseded by ADR-011.** Kept only as traceability of the corrected assumption.
 
 ## ADR-010 — Documentation-only Phase 0
-**Status:** Accepted. No application code in Phase 0.
+**Accepted.** No application code in Phase 0.
 
-## ADR-011 — Arabic-first product with Darija support
-**Status:** Accepted (audit correction). Context: approved product decision. Decision: UI default `ar`, `fr` secondary; copy locales `ar`, `ar-DZ`, `fr`; RTL-ready from first screen. Consequences: locale-aware prompts and tests; no French-only defaults. Supersedes ADR-009.
+## ADR-011 — Arabic-first product with Darija style
+**Accepted, refined by ADR-019.** UI default `ar` (MSA/RTL), `fr` secondary; content styles `msa` (`ar`), `darija` (`ar-DZ`), `fr`. Supersedes ADR-009.
 
-## ADR-012 — Hardened Postgres queue + defined Celery migration path
-**Status:** Accepted (audit correction). Context: Redis not added for complexity. Decision: job table with `FOR UPDATE SKIP LOCKED`, leases, `run_at`, retries/backoff/jitter, idempotency, dead-letter, monitoring, concurrency 2. Migration: stable `JobDispatcher`, Celery+Redis behind it, outbox, shadow run. Consequences: low dependencies; measured scaling threshold required. Amends ADR-005.
+## ADR-012 — Hardened Postgres queue + Celery migration path
+**Accepted.** `FOR UPDATE SKIP LOCKED`, leases, `run_at`, bounded retries/backoff+jitter, idempotency, dead-letter, monitoring, concurrency 2. Migration via stable `JobDispatcher`, outbox, shadow run. Redis not added for complexity.
 
 ## ADR-013 — Provider-independent AI gateway
-**Status:** Accepted. Decision: `TextProvider` + `ImageProvider` protocols; `ai_provider_configs`/`ai_models` for model config, price, priority, fallback, residency; usage/cost records; rate limits; circuit breaker; policy-gated fallback. Consequences: no lock-in; more config surface but no provider-specific business columns. Supersedes ADR-007.
+**Accepted.** `TextProvider`/`ImageProvider`, config-driven models/prices/fallback/residency, usage/cost tracking, rate limits, circuit breaker, policy-gated fallback.
 
 ## ADR-014 — Fail-closed approval and financial safety
-**Status:** Accepted. Decision: unified `approval_requests` + immutable `approval_snapshots` + `external_actions`/attempts; explicit approval for publish and ad activation; exact budget ceiling + FX snapshot; budget edits supersede approvals; no automatic increases; no external call on validation failure. Consequences: extra write path, strong auditability.
+**Accepted, extended by ADR-017.** Versioned approvals, immutable snapshots, exact ceiling + FX snapshot, no automatic increases, no external effect on validation failure.
 
-## ADR-015 — Dual currency display with FX snapshots
-**Status:** Accepted. Decision: DZD base, DZD+USD display from `fx_rates` snapshots; approvals store native ceiling, USD display, snapshot ID; clients cannot submit rates. Consequences: FX source/rounding policy still open.
+## ADR-015 — Dual currency with immutable FX snapshots
+**Accepted, amended.** DZD base, DZD+USD display from **immutable `fx_rate_snapshots`**; clients cannot submit rates. **FX source and rounding are an unresolved configuration decision**, not a selected vendor. Approvals store native ceiling, USD display, snapshot ID.
 
-## ADR-016 — Corrected MVP scope and deferrals
-**Status:** Accepted. Decision: MVP includes auth, organization, business profile, products, AI Studio, Arabic/Darija copy, creatives, calendar, approval center, basic landing pages, leads, usage limits, responsive web, dual currency. Deferred: Android, complex CRM, advanced optimization, multi-platform ads, advanced analytics, billing. Consequences: ad tables documented but not activated.
+## ADR-016 — Corrected MVP scope
+**Accepted, clarified.** MVP includes auth, organization, business profile, products, AI Studio, Arabic/Darija copy, human Arabic review, creatives, calendar, approval center, landing pages, leads, usage limits, responsive web, dual currency. **Direct social publishing and paid ad execution are outside MVP implementation**; extension points (`external_actions`, outbox, ad/social tables, approval kinds) and safety requirements are preserved. Android, CRM, advanced optimization/analytics, billing deferred.
+
+## ADR-017 — Transactional outbox, external state machine, reconciliation
+**Accepted.** Action authorization and outbox event commit in one transaction; deterministic provider idempotency key reused on retry; state machine includes `uncertain` with automatic retry forbidden; reconciliation resolves uncertain results by provider idempotency key/reference, detects duplicates, freezes tenant execution on unexplained effects, and appends audit evidence. Prevents duplicate publishing/spending on ambiguous external results.
+
+## ADR-018 — Owner-only final approval authority
+**Accepted.** Owner is the only role that can decide approvals. Editors prepare/submit; viewers read-only. Server-side role check on `/approvals/{id}/decide` and independent re-validation in execution handlers prevent API bypass. Arabic reviewer is an editor capability flag, never an approval authority.
+
+## ADR-019 — Arabic quality human review
+**Accepted.** `ar` (MSA) default UI/content locale; `ar-DZ` Darija distinct style; `fr` secondary. `ar`/`ar-DZ` drafts require an `arabic_reviews` approval by a flagged editor reviewer (grammar, Darija authenticity, brand voice, cultural fit, factual claims) before owner approval. Refines ADR-011.
