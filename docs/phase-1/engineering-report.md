@@ -1,9 +1,30 @@
 # Phase 1 — Engineering Report
 
-**Status:** Implementation complete and tested; awaiting Product Owner review.
+**Status:** Phase 1 Engineering Acceptance: **CONDITIONALLY ACCEPTED**.
 **Branch:** `arena/5dc98770-ai-growth-operator`
 **PR:** #15 — open draft, targeting `main`, **not merged**
 **Phase 2:** not started.
+
+## 0. Engineering acceptance decision
+
+**Phase 1 Engineering Acceptance: CONDITIONALLY ACCEPTED** (engineering review, 2026-11-24).
+
+Evidence accepted:
+
+- PostgreSQL runtime uses the non-privileged `ago_app` role.
+- RLS and cross-tenant API isolation tests passed.
+- Migration `upgrade → downgrade → upgrade` passed from a clean database.
+- Authentication, session expiration and revocation tests passed.
+- Audit-log integrity and secrets scanner checks passed.
+- CI passed on code HEAD `562575a`; working tree was clean.
+- PR #15 remains OPEN and DRAFT; `main` remains unchanged at `7820f29`.
+
+Outstanding conditions:
+
+1. The repository owner must enable and verify branch protection on `main` (Issue #14). It is **NOT VERIFIED**; do not close the issue or merge PR #15 until verified.
+2. Production environment security and operational readiness must be verified before deployment.
+
+The independent audit (`docs/phase-1/independent-acceptance-audit.md`) and remediation evidence (`docs/phase-1/remediation-report.md`) remain preserved and unchanged. CI evidence refers to the code HEAD `562575a`; this decision entry is documentation-only and adds no application changes.
 
 ## 1. Issue-by-issue delivery
 
