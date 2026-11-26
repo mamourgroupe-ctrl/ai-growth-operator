@@ -6,13 +6,16 @@
 
 | Category | Summary |
 |---|---|
-| Approved decisions | Next.js + TypeScript; Arabic-first RTL default; French as secondary locale; responsive web first; no direct social publishing; owner-only final approval. |
-| Proposed decisions | Workspace navigation grouped by workflow; Arabic reviewer flag; validation blocks submission. |
-| Open questions | French UI scope; approval/landing screens moved into Phase 2; Darija editing UX; lead PII redaction for viewer. |
-| External dependencies | Owner roadmap decision; human Arabic reviewer availability; design system constraints. |
+| `OWNER_APPROVED` / `FROZEN` baseline | Next.js + TypeScript; Arabic-first RTL default; French as secondary locale; responsive web first; no direct social publishing; owner-only final approval. |
+| `OWNER_PROPOSED` decisions | D-01–D-05, D-07, D-08 per `20-owner-decision-register.md`. Workspace navigation, reviewer flag and validation block are `FROZEN` engineering baselines. |
+| `BLOCKED` / `DEFERRED` | French UI scope `BLOCKED`; final owner confirmation pending; lead PII redaction and lead UI `DEFERRED`; DZD-only user display. |
+| External dependencies | Owner authorization for issue/document amendments; human Arabic reviewer availability; design system constraints. |
+| Confirmed boundary | No ad budget, paid execution, FX, external campaign, or launch-control screen is in Phase 2. |
 | Risks | Confusing Darija vs MSA; unintended publishing affordance; dense admin screens. |
 
 ## 1. IA
+
+The approval center is Phase 2 content approval only. Internal landing create/edit/preview is `OWNER_PROPOSED`; leads, lead PII redaction and publish controls are `DEFERRED` to Phase 3 or later. The locale/RTL/style subset is a planning proposal. DZD-only user display applies; no foreign-currency UI, external publication or advertising execution screen is in Phase 2.
 
 ```text
 Sign in / tenant selection (Phase 1)
@@ -31,8 +34,7 @@ Sign in / tenant selection (Phase 1)
     Review queue (Arabic reviewer)
     Approval center (owner)
   Growth surface
-    Landing pages
-    Leads
+    Landing pages (internal create/edit/preview only)
   Settings
     Workspace & members
     Usage & cost
@@ -86,9 +88,9 @@ No buttons or menu items for external publish, ad launch, budget change, or auto
 - Owner queue: validation + review evidence, diff of version, approve/reject/request changes; reason required for negative decisions.
 - Audit trail visible per request.
 
-### 2.11 Landing pages and leads
-- Page builder: hero, products, contact form, SEO fields; mobile preview; internal publish requires approval.
-- Leads table with source/page/date/status; viewer sees redacted contact fields until owner grants explicit permission (approval needed).
+### 2.11 Landing pages
+- Internal page builder: hero, products and SEO fields; mobile/draft preview; approved version state where already designed.
+- No lead form submission, lead table, lead management screen, viewer redaction policy or publish button in Phase 2. All lead functionality and publishing are `DEFERRED` to Phase 3 or later.
 
 ### 2.12 Usage
 - Owner-only: quota usage, estimated cost from snapshots, model usage breakdown; no provider keys/raw prompts.

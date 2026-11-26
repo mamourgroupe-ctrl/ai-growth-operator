@@ -9,8 +9,9 @@
 |---|---|
 | Approved decisions | Phase 0/1 stack, RLS+RBAC, owner-only approval, provider-independent gateway, S3-compatible abstraction, no external publishing/spend. |
 | Proposed decisions | Domain modules inside one FastAPI app; separate worker process sharing the codebase/DB; gateway policy engine; asset service; validation service. |
-| Open questions | Provider/model selection; storage provider; residency; whether approval/landing pages move into Phase 2. |
-| External dependencies | Legal/privacy review, benchmark outcomes, provider contracts. |
+| `OWNER_PROPOSED` / `BLOCKED` | D-01 owner-only approval; D-02 internal landing pages only with leads `DEFERRED`; D-03 DZD-only user display; D-04 configurable quotas; D-05 study sectors; D-07 benchmark-based provider choice; D-08 comparison-based storage choice. Final confirmation and external evidence remain `BLOCKED`. |
+| External dependencies | Legal/privacy review, benchmark outcomes, provider contracts, owner authorization for issue amendments. |
+| Confirmed boundary | Phase 2 content approval core only; advertising execution, FX, paid outbox/reconciliation and external state machines are Phase 3. |
 | Risks | Worker/API DB contention; provider cost surprises; prompt injection; scope creep into CRM/billing. |
 
 ## 1. System shape
@@ -24,7 +25,7 @@ FastAPI modular monolith
   ├── business / catalog / brand / onboarding
   ├── content / validation / arabic_review / approval
   ├── creative / assets / calendar
-  ├── landing / leads
+  ├── landing_pages (internal create/edit/preview only)
   ├── ai_gateway (TextProvider, ImageProvider, policy, registry, usage)
   └── outbox dispatcher (reserved for future external effects)
         |
@@ -53,7 +54,7 @@ Deployables remain web, API, worker, and reconciliation job (reconciliation only
 | `approval` | Approval requests, snapshots, owner decision | Allow editor/viewer decision |
 | `creative` | Image generation jobs, metadata | Use product image without ownership proof |
 | `assets` | Object storage refs, signed URLs, scan status | Serve public URLs by default |
-| `landing` / `leads` | Internal pages and lead capture | Advanced CRM features |
+| `landing_pages` | Internal create/edit/preview and draft/version history | External publishing, lead capture, lead management, CRM and paid actions |
 | `usage` | Quota snapshots, cost views | Expose secrets/provider keys |
 
 Cross-module communication uses in-process service interfaces and DB transactions, not service-to-service HTTP.
@@ -75,7 +76,7 @@ Cross-module communication uses in-process service interfaces and DB transaction
 ### 3.3 Approval flow
 - Editor submits content version + validation result + Arabic review (when required) → approval request + immutable snapshot.
 - Owner decides. Rejection/change request returns to draft. Editing an approved item creates a new version and supersedes prior approval.
-- Landing page internal publish requires an approved page version. No external side effects are created in Phase 2.
+- Landing pages support internal drafts, version history and preview only. Publish execution, public URLs and lead capture are `DEFERRED`; no external side effect is created in Phase 2.
 
 ## 4. AI Gateway design
 
@@ -112,19 +113,20 @@ Reuse Phase 1 `ai_generation_jobs` with ADR-012 hardening (#20): `SKIP LOCKED`, 
 
 - RLS on every tenant-owned table; app role `ago_app` non-superuser/NOBYPASSRLS; tests must use it.
 - Authorization dependency resolves tenant membership/role from DB in the same tenant context; client cannot supply role.
-- Viewer blocked on mutations; editor blocked on owner-only approval; Arabic reviewer is not approver.
+- Viewer is read-only; Arabic reviewer reports findings and is not final approver; editor prepares and submits. D-01 is `OWNER_PROPOSED` with owner-only final approval, matching the existing baseline; `12-approval-workflow-spec.md §1` contains the role matrix.
 - Secrets only in GitHub Environments/host secret manager; no secrets in source/logs; signed URL tokens not logged.
-- Logs redact prompts, tokens, provider keys, lead contact details. Audit logs record actor, action, target, request ID, and decision evidence.
+- Logs redact prompts, tokens and provider keys. No lead PII exists in Phase 2. Audit logs record actor, action, target, request ID and decision evidence.
 - No production data in dev/CI. Synthetic fixtures only.
 
-## 8. Consequences of moving approval/landing pages into Phase 2
+## 8. Consequences of the confirmed Phase 2 boundary
 
-If owner approves re-baselining:
-- `approval` module and `landing/leads` modules move from Phase 3 to Phase 2C/2D.
-- Outbox remains reserved; internal landing publish writes no external action.
-- UI work (#25) must be partially pulled forward for usable screens; otherwise Phase 2 APIs have no product surface.
-If not approved:
-- Phase 2C/2D deliver only draft schemas, contracts, and feature-flagged endpoints that cannot publish; approval and leads remain Phase 3.
+**Confirmed:** the Phase 2 approval core is in scope. Ad-spend approval, FX snapshots for advertising, external paid-action authorization, outbox/reconciliation, external execution state machines, and automatic campaign launching remain Phase 3. No alternative naming may move them into Phase 2.
+
+- `approval` module implements Phase 2 content approval core: validation gate, review evidence, owner-only decision under D-01 `OWNER_PROPOSED`, immutable versions/snapshots, audit, and supersession.
+- `landing_pages` is `OWNER_PROPOSED` for internal create/edit/preview only. Lead tables, public lead ingestion, lead APIs, lead UI, publish execution, campaign integration and paid effects are `DEFERRED` to Phase 3 or later.
+- Outbox dispatcher and reconciliation remain reserved for Phase 3; internal landing publish, if approved, writes no external action.
+- Locale/RTL/style work is proposed for Phase 2 (#25 subset); D-03 `OWNER_PROPOSED` sets DZD-only user display and internally recorded USD AI cost, with no FX source or conversion. Advertising FX remains Phase 3.
+- The Phase 1 `outbox_events` table may remain as existing baseline schema; this does not authorize Phase 2 paid-action outbox use.
 
 ## 9. Architecture risks
 

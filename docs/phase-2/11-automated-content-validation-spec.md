@@ -6,10 +6,10 @@
 
 | Category | Summary |
 |---|---|
-| Approved decisions | AI output untrusted; human approval mandatory; no external publishing; no AI authorization of decisions. |
-| Proposed decisions | Deterministic-first validation pipeline with optional model-assisted checks; severity model (`block`/`warn`/`info`); validation evidence stored per version. |
+| `OWNER_APPROVED` / `FROZEN` baseline | AI output untrusted; human approval mandatory; no external publishing; no AI authorization of decisions. |
+| `OWNER_PROPOSED` / `FROZEN` | Owner choices D-01–D-05, D-07, D-08 are preliminary. Deterministic-first validation, severity model and evidence storage are `FROZEN` engineering baselines. |
 | Open questions | Banned claim taxonomy per sector; tolerance for near-duplicate text; model-assisted validator provider; reviewer sign-off criteria. |
-| External dependencies | Pilot sector approval; legal review of claim rules; Darija reviewer. |
+| `BLOCKED` / `DEFERRED` | Sector-specific rules `BLOCKED` pending selection; legal claim review and Darija reviewer availability `BLOCKED`; lead functionality `DEFERRED`. |
 | Risks | False positives blocking content; false negatives passing claims; over-reliance on automated checks. |
 
 ## 1. Principles
@@ -80,16 +80,18 @@ Validation receives a frozen snapshot:
 }
 ```
 
-- `overall=blocked` → cannot submit for Arabic review/approval; editor must edit or request policy override (override cannot clear price/banned/asset/instruction blocks).
-- `overall=warned` → can submit with visible warning; owner decides.
-- Every re-validation creates a new `content_validations` row; no mutation of prior evidence.
+- `overall=blocked` → cannot submit for Arabic review/approval. There is **no override path** for `block` findings. Must-correct rule codes: `schema_invalid`, `empty_output`, `locale_mismatch`, `price_mismatch`, `currency_missing`, `banned_claim`, `tool_instruction_leak`, `asset_unscanned`, `asset_cross_tenant`.
+- `overall=warned` → can submit with visible warning. Owner may record an override reason for `warn` findings only (`unsupported_claim` when configured warn, `duplicate_content`, `brand_tone`, `darija_authenticity_hint`, `seasonality_stale`); the reason is appended to audit evidence.
+- `overall=passed` → may proceed to Arabic review where required, then approval.
+- Every re-validation creates a new `content_validations` row; no mutation of prior evidence. Canonical body is `content_versions.body` per `03-database-design.md §1`.
+- Validation endpoints use `/api/v1/content/versions/{id}/validate`; approval endpoints use `/api/v1/approval/...` per `05-api-contracts.md §2`. No advertising validation/approval kind exists in Phase 2.
 
 ## 6. Price extraction rules (deterministic)
 
 - Parse Arabic-Indic and Western digits; normalize `د.ج`, `DZD`, `DA` to `DZD` only if configured.
 - If a price token is found without a recognized currency and product context is ambiguous → `currency_missing` block.
 - If generated text mentions multiple products, match by exact product name snippet first; otherwise block on ambiguity.
-- Do not convert currency. FX source unresolved; any conversion must come from approved snapshot.
+- Do not convert currency (D-03 `OWNER_PROPOSED`). No Phase 2 FX source or conversion rule; user-facing amounts are DZD-only and USD AI cost evidence is internal only.
 
 ## 7. Banned claims and legal sensitivity
 

@@ -6,23 +6,27 @@
 
 | Category | Summary |
 |---|---|
-| Approved decisions | Mandatory human approval; owner-only final decision; AI never approves; no direct publishing; immutable audit evidence. |
-| Proposed decisions | Two-stage pipeline (Arabic review → owner decision), version-based approval invalidation, explicit request states. |
-| Open questions | Whether Arabic review is required for `fr`; delegation when no owner exists; retention; approval SLA. |
-| External dependencies | Owner roadmap decision on #23; human reviewer availability. |
+| `OWNER_APPROVED` decisions | Mandatory human approval; owner-only final decision; AI never approves; no direct publishing; immutable audit evidence. |
+| `OWNER_PROPOSED` decisions | D-01 owner-only final approval; D-02 internal landing pages only; D-03 DZD-only display; D-04 configurable quotas; D-05 study sectors; D-07 benchmark provider choice; D-08 comparison storage choice. Two-stage pipeline and version invalidation are `FROZEN`. |
+| `BLOCKED` / `DEFERRED` | Final owner confirmation; `fr` review and SLA `BLOCKED`; lead functionality and publishing execution `DEFERRED`. |
+| External dependencies | Owner authorization for issue/document amendments; human reviewer availability. |
+| Confirmed boundary | Phase 2 approval is content-only. Ad-spend approval, FX snapshots, external paid-action authorization, outbox/reconciliation, external state machines and campaign launching are Phase 3 only. |
 | Risks | Unintended auto-approval via edits; editor escalating role; stale approval reused. |
 
-## 1. Roles and authority
+## 1. Roles and authority (D-01 `OWNER_PROPOSED`)
 
-| Action | owner | editor | Arabic reviewer | viewer |
+**Owner preliminary choice:** final approval is owner-only. Editors prepare and submit content; Arabic reviewers report linguistic findings; viewers are read-only. Validation (`block`/`warn`), Arabic review and human approval are separate gates. D-01 is `OWNER_PROPOSED` pending final confirmation; this preserves the existing owner-only baseline.
+
+| Action | Owner | Editor | Arabic reviewer | Viewer |
 |---|---|---|---|---|
-| Create/edit draft | yes | yes | yes (if editor) | no |
+| Create/edit draft | yes | yes | yes (if also editor) | no |
 | Complete Arabic review | no* | yes if flagged | yes | no |
-| Submit for approval | yes | yes | yes if editor | no |
-| Approve / reject / request changes | **yes** | no | no | no |
-| Override validation block | yes (documented) | no | no | no |
+| Submit for approval | yes | yes | yes (if editor) | no |
+| Final approve / reject / request changes | **yes** | no | no | no |
+| Record `warn` override reason | yes | no | no | no |
+| Clear `block` finding | no | no | no | no |
 
-\*Owner may also be flagged as reviewer but cannot use review status as final approval.
+\*An owner may also be flagged as reviewer, but review status is not final approval. Arabic reviewer capability uses the existing `tenant_memberships.is_arabic_reviewer` field from `0001_initial` (`03-database-design.md §1`). No role may approve advertising spend or external actions in Phase 2.
 
 ## 2. State model
 
@@ -39,20 +43,22 @@
 - Request stores immutable `approval_snapshots` with version payload hash.
 - Decision stores actor, timestamp, reason, request id, validation findings, Arabic review reference.
 
-### Landing page
-`draft → approved_version → internally_published`
+### Landing page (conditional scope)
+`draft → approved_version` (internal preview/draft history only)
 
-- Internal publish does not create external side effects. Changing approved blocks creates a new version and requires new approval.
+- Approval status lives on `landing_page_versions`; `landing_pages` holds only a non-authoritative pointer. No circular approved-version FK exists.
+- Internal publish execution is `DEFERRED` to Phase 3 or later; no Phase 2 publishing endpoint. Changing approved blocks creates a new version and requires new approval.
 
 ## 3. API and data invariants
 
-1. `POST /approval/requests/{id}/decide` checks `tenant_membership.role == 'owner'` inside tenant context; editors/viewers receive 403.
-2. No service, job, gateway, or migration path can set `approval_requests.status='approved'` except the owner decision service.
-3. Submitting requires: no `block` findings; Arabic review for `ar`/`ar-DZ`; asset ownership/scans validated; stable payload hash.
-4. Idempotency key on decide endpoint prevents double decision; repeated request returns original decision.
+1. `POST /api/v1/approval/requests/{id}/decide` checks `tenant_membership.role == 'owner'` inside tenant context; editors/viewers receive 403. This path matches `05-api-contracts.md §2`.
+2. No service, job, gateway, or migration path can set `approval_requests.status='approved'` except the owner decision service; this preserves the owner-only baseline under D-01 `OWNER_PROPOSED`.
+3. Submitting requires: no `block` findings; Arabic review for `ar`/`ar-DZ`; asset ownership/scans validated; stable payload hash. `warn` overrides are owner-recorded and auditable; `block` findings cannot be cleared.
+4. Idempotency key on the decide endpoint prevents double decision; repeated request returns original decision.
 5. Rejection/change request must include non-empty reason; reason stored in audit.
-6. Approval snapshot append-only; UPDATE/DELETE rejected by DB constraint/trigger + repository design.
-7. If owner membership removed after approval, approved content remains valid but internal publish of new versions is blocked until an owner exists.
+6. `approval_requests` has no `snapshot_id` FK. `approval_snapshots.approval_request_id` points to the request; snapshots are append-only with unique `(tenant_id, approval_request_id, version)`.
+7. `kind='content'` only in Phase 2. No ad-spend kind, FX ceiling, external action, outbox, reconciliation, publishing execution or lead state exists here.
+8. If owner membership is removed after approval, approved content remains valid; no Phase 2 publish endpoint exists.
 
 ## 4. UI evidence shown to owner
 
@@ -73,7 +79,7 @@
 | `approval.requested` | request id, snapshot hash |
 | `approval.decided` | decision, reason, actor, request id |
 | `approval.superseded` | old version, new version |
-| `landing.internally_published` | page id, approved version, actor |
+| `landing.internally_published` | Phase 3+ `DEFERRED`; historical event only |
 
 Audit rows are tenant-scoped except system events; no raw secrets or provider keys.
 
@@ -89,6 +95,8 @@ Audit rows are tenant-scoped except system events; no raw secrets or provider ke
 
 ## 7. Open questions
 
+- Final confirmation is pending for D-01; the preliminary choice preserves owner-only final approval, editor submission, reviewer findings and viewer read-only access. Do not treat a preliminary choice as final approval.
 - Should `fr` require French-language review in pilot?
-- Can an owner delegate approval to another owner only, or to a trusted editor? Current decision: owner only.
-- What SLA triggers reminder notifications? Notifications not in Phase 2 scope unless separately approved.
+- Can an owner delegate final approval to another owner only, or to a trusted editor? Current documented decision: owner only, unchanged.
+- What SLA triggers reminder notifications? Notifications are not in Phase 2 scope unless separately approved.
+- Landing page approval is `OWNER_PROPOSED` for internal draft/version state only; publish execution is `DEFERRED`.

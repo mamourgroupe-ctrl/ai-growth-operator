@@ -1,26 +1,31 @@
 # Phase 2 — Final Engineering Planning Report
 
-**Outcome:** Phase 2 documentation prepared. **Phase 2 implementation has NOT started.**  
-**Status:** Ready for owner review; no provider/storage/sector selection made; no code, migration, endpoint, issue, deployment, or spend action performed.
+**Outcome:** Phase 2 documentation prepared, then Phase 2.5 documentation remediation applied. **Phase 2 implementation has NOT started.**
+**Status:** Phase 2.6 owner-decision documentation reconciliation applied in the workspace; final owner confirmation remains pending. No provider/storage/sector selection made; no code, migration, endpoint, issue, deployment, or spend action performed.
+
+> **Historical-state notice:** This report was originally written as the Phase 2 planning final report at commit `8da2f9aa161070ab2f4af7beca54b9bd41345e23`. Statements below about “this task” refer to that original planning task unless explicitly labeled **Phase 2.5 remediation** (observation dates 2026-11-24/25). The remediation was performed on the same Arena branch without commit or push; the current working tree therefore differs from the historical commit. Historical facts are retained with their original context rather than silently rewritten.
 
 ## Decision status
 
 | Category | Summary |
 |---|---|
-| Approved decisions | Preserved Phase 0/1 decisions only: modular monolith, multi-tenant SaaS, Next.js+TypeScript, FastAPI, PostgreSQL, SQLAlchemy+Alembic, RLS+RBAC, provider-independent gateway, S3-compatible abstraction, owner-only approval, no direct publishing/spend, no production data in lower environments. |
-| Proposed decisions | All Phase 2 architecture, schema, API, QA, deployment, roadmap, backlog and ADR-020..027 items in `docs/phase-2/` — subject to owner approval. |
-| Open questions | Pilot sector; roadmap re-baseline of #23/#24/#25; text/image provider; storage provider; legal/privacy/ANPDP position; quotas; FX source; French UI scope. |
-| External dependencies | Official benchmark execution, Algerian legal review, provider terms/DPAs, human Arabic/Darija reviewers, owner sign-off, #14 verification. |
+| `OWNER_APPROVED` baseline | Preserved Phase 0/1 decisions plus owner-confirmed Phase 2 scope: automated content validation, human content review, content approval permissions, immutable/versioned approval snapshots, approval history/audit, invalidation on content change, content calendar/management, AI usage quota/cost tracking. Existing owner-only final approval remains unchanged. |
+| `OWNER_PROPOSED` decisions | D-01, D-02, D-03, D-04, D-05, D-07 and D-08 are preliminary owner choices recorded in `20-owner-decision-register.md`; none is finally approved. Phase 2 architecture/schema/API/QA/deployment/roadmap/backlog/ADR items remain proposals or `FROZEN` technical baselines. |
+| `BLOCKED` / `DEFERRED` | Final confirmation; D-04 numeric values; D-05 sector selection; D-07 benchmark evidence; D-08 storage/legal evidence; D-10/French UI scope. Lead functionality and publishing are `DEFERRED`. |
+| External dependencies | Corrected benchmark execution (not run), Algerian legal review, provider terms/DPAs, human Arabic/Darija reviewers, owner sign-off, #14 verification. |
 | Risks | Scope conflict; unproven Darija quality; provider cost/deprecation; unauthorized data transfer; approval bypass; branch protection unverified. |
+| Confirmed Phase 3 boundary | Ad budget approval, ad expenditure, paid ad execution, external ad-platform campaign execution, paid-action authorization, advertising FX snapshots, paid outbox/reconciliation, external execution state machines, and automatic campaign launching. |
 
 ## 1. Branch and repository state (reviewed)
 
 - Branch: `arena/5dc98770-ai-growth-operator` (current branch; based on `main` commit `7820f29893815562613dd9c72ea4b0e51b956df3`).
-- HEAD before documentation: `aaf37f1f0304f0a47c11c2566f6204dc594a96c9`.
+- HEAD before the original Phase 2 planning work: `aaf37f1f0304f0a47c11c2566f6204dc594a96c9` (historical fact).
+- HEAD after Phase 2 planning commits and before Phase 2.5 remediation: `8da2f9aa161070ab2f4af7beca54b9bd41345e23` (verified 2026-11-24/25).
 - `main` / `origin/main`: `7820f29893815562613dd9c72ea4b0e51b956df3` — unchanged.
-- Draft PR #15: OPEN, DRAFT, unmerged, `headRefOid=aaf37f1...` — not merged.
-- Issue #14: OPEN; `main` branch protection **NOT VERIFIED** (prior 403 on read attempt).
-- Working tree before this task: clean.
+- Draft PR #15 (observed 2026-11-24/25): OPEN, DRAFT, unmerged, head `8da2f9a...`, base `main`, `MERGEABLE` — not modified.
+- Issue #14: OPEN; `main` branch protection **NOT VERIFIED** (GitHub API returned 403 on read attempt).
+- Working tree before Phase 2.5 remediation: clean.
+- Working tree during/after Phase 2.5 remediation: modified documentation under `docs/phase-2/` only; no commit or push.
 
 ## 2. Files reviewed (read-only)
 
@@ -54,7 +59,9 @@ All new files are documentation under `docs/phase-2/`:
 | 17 | `17-architecture-decision-record.md` | Proposed ADR-020..027 |
 | 18 | `18-final-engineering-report.md` | This report |
 
-**Modified files:** none. Prior Phase 0/Phase 1 reports were preserved unchanged. **Deleted files:** none.
+**Original planning task:** modified files were none; prior Phase 0/Phase 1 reports were preserved unchanged; deleted files none.
+
+**Phase 2.5 remediation:** all 18 files under `docs/phase-2/` were reviewed and the files with verified inconsistencies were edited in place. The complete itemized list, per-file summary, and F-01–F-28 register are in the final in-chat remediation report and in `16-github-issue-backlog.md §6`. No file outside `docs/phase-2/` was changed.
 
 ## 4. Comparison sources (official, dated 2026-11-25)
 
@@ -73,31 +80,34 @@ Exact prices and model names are in docs 07–09. Third-party search snippets we
 
 ### Benchmark status
 
-- Reproducible benchmark **plans** with frozen synthetic fixtures, exact prompts/tasks, repetition counts, metrics and pass criteria are documented in docs 07 and 08.
+- Corrected reproducible benchmark **plans** are documented in docs 07 and 08: valid versioned fixture, consistent product count, pinned model identifiers/revisions, separated image generation/editing tasks, and recorded token/cache/error/latency accounting.
 - **No benchmark has been executed** (no sandbox calls, no spend, no API keys). No provider has been declared faster, cheaper in practice, more Arabic-capable, or higher quality from an unrun test.
-- Cost tables are illustrative calculations from list prices only; they are not invoices or performance evidence.
+- Cost tables are corrected illustrative calculations from list prices only; they are not invoices or performance evidence. The R2 40 GB pilot is not wholly within the 10 GB-month free tier, and 1,500 GB B2 egress is within the 3× free allowance; no `$60` figure is asserted.
+- Regional availability includes Algeria in official provider lists, but transfer legality is a separate unresolved legal gate.
 
 ## 5. Recommended architecture (proposed, not approved)
 
 - Single FastAPI modular monolith + separate worker process sharing package and PostgreSQL; Next.js responsive Arabic-first UI.
 - Tenant-owned tables use shared schema with FORCE RLS, `USING`/`WITH CHECK`, composite tenant FKs, and `ago_app` non-superuser runtime role.
 - AI gateway with `TextProvider`/`ImageProvider` protocols, config-driven model registry with dated price snapshots, policy engine, fake adapters in CI, quotas and idempotent usage records; client cannot select provider/model.
-- Untrusted generated output → deterministic validation → Arabic human review for `ar`/`ar-DZ` → owner-only approval with immutable version snapshots. No tools, publishing, spend, or self-approval.
-- Private S3-compatible asset storage with server-generated keys, short signed URLs, MIME/checksum/scan gates; provider deferred.
-- Approval center and landing/leads are **gated** on owner re-baseline of #23/#24/#25; otherwise contracts/drafts only.
+- Untrusted generated output → deterministic validation (non-overridable `block` findings; owner-recorded `warn` overrides) → Arabic human review for `ar`/`ar-DZ` → owner-only-decision baseline with immutable `content_versions.body` snapshots and approval history. No tools, publishing, spend, or self-approval.
+- Canonical AI idempotency is `(tenant_id, idempotency_key)`; AI price snapshots are USD operating-cost evidence, never advertising FX or ad budgets.
+- Private S3-compatible asset storage with server-generated keys, short signed URLs, MIME/checksum/scan gates; provider deferred pending non-price residency/legal review.
+- Content approval core is owner-confirmed Phase 2. #23 is proposed to split, with ad-spend/FX/external execution remaining Phase 3. D-02 preliminarily limits landing pages to internal create/edit/preview and defers all lead functionality and publishing to Phase 3 or later; #25 UI subset remains a proposal.
 - Deployment: local/CI/staging/production with synthetic data below production, feature flags default-off, secrets in environment stores, migration as controlled step.
 
 ## 6. Unresolved decisions requiring owner input
 
-1. Approve/reject Phase 2 package split and re-baseline of #23/#24/#25.
-2. Approve pilot sector (recommendation: bakeries/patisseries; alternatives documented).
-3. Approve text/image provider after benchmark; acknowledge deprecations.
-4. Approve object storage provider/residency.
-5. Legal/privacy: DPO, processing register, automated logs, cross-border transfer authorization, allowed data categories, retention.
-6. Quotas/cost caps; fixed per-tenant interpretation of #21 (billing remains non-goal).
-7. FX source, timestamp, rounding for #22.
-8. French UI locale scope; viewer lead-PII redaction policy.
-9. Verify `main` branch protection (#14) before production release.
+1. Obtain final owner confirmation for D-01, D-02, D-03, D-04, D-05, D-07 and D-08. Preliminary choices are not approvals.
+2. D-02 issue amendments remain documented only; no GitHub issue was edited; see `16-github-issue-backlog.md §2.1`.
+3. D-05: no pilot sector is selected; sector examples are hypotheses/candidates; sector-neutral work may use synthetic fixtures.
+4. D-07: select text/image providers only after a documented benchmark covering quality, MSA, Darija, French, cost, latency, reliability, privacy and retention.
+5. D-08: select storage only after a documented comparison covering residency, security, encryption, backup/recovery, DPAs, retention, egress and total cost.
+6. Legal/privacy: DPO, processing register, automated logs, cross-border transfer authorization, allowed data categories and retention remain `BLOCKED`.
+7. D-04: system administrator proposes numeric quota/cost values and owner approves; no numerical enforcement before approval.
+8. D-03: DZD-only user-facing, USD AI cost internally; no conversion or FX source. Advertising FX source/rounding for #22 remains Phase 3.
+9. French UI scope remains `BLOCKED`; viewer lead-PII redaction is `DEFERRED` with Phase 3 leads.
+10. Verify `main` branch protection (#14) before production release; current status NOT VERIFIED.
 
 ## 7. Risks and mitigations (summary)
 
@@ -115,24 +125,37 @@ Exact prices and model names are in docs 07–09. Third-party search snippets we
 
 ## 8. Backlog and dependencies
 
-Existing Phase 2 issues #8–#11, #16–#22, #27 are retained with proposed dependency order: foundation (#16/#17) → queue (#20) → gateway/usage (#9/#18/#21) → content/validation (#8 + proposed N2) → Arabic review (#27) → creative/calendar (#19) → gated #23 → gated #24/#25. Proposed new issues: P2-N1 onboarding assistant, P2-N2 validation, P2-N3 benchmark harness, P2-N4 asset upload/scan. No issues were created or edited. Full criteria in `16-github-issue-backlog.md`.
+Retained issues in proposed dependency order: foundation (#16/#17) → queue (#20) → gateway/usage (#9/#18/#21; numeric limits pending) → content/validation (#8 + proposed N2) → Arabic review (#27) → creative/calendar (#19) → Phase 2 content approval slice of #23 → proposed internal-only #24/#25 subset. Issue #22 advertising FX is Phase 3; #23 advertising/external execution and #26 outbox/reconciliation are Phase 3. Proposed new issues: P2-N1 onboarding assistant, P2-N2 validation, P2-N3 benchmark harness, P2-N4 asset upload/scan. No issues were created or edited. Full criteria in `16-github-issue-backlog.md`.
 
 ## 9. Testing and acceptance strategy
 
 CI lint/test/security gate preserved; unit, API/contract, DB/RLS catalog, migration cycle, fake-provider integration, worker/queue, adversarial validation, approval-negative and optional E2E/a11y suites proposed. Human gates: Arabic reviewer for `ar`/`ar-DZ`; owner review of benchmark/provider/storage/pilot; legal gate before real data. No benchmark result or test is claimed to have been run in this planning task. Detailed criteria in `13-testing-qa-strategy.md`.
 
-## 10. Internal architecture review (performed before this report)
+## 10. Internal architecture review
 
-- Verified all 18 deliverables exist and each required decision-status section is present.
-- Verified no provider/storage/sector is selected; no benchmark is claimed as executed.
-- Verified non-negotiables preserved: RLS+RBAC, owner-only approval, no direct publishing/spend, S3 abstraction, no production data in lower environments.
-- Verified roadmap conflict #23/#24/#25 is explicitly gated rather than silently moved.
+**Historical review performed before the original report (at `aaf37f1`):**
+
+- Verified all 18 deliverables existed and each required decision-status section was present.
+- Verified no provider/storage/sector was selected; no benchmark was claimed as executed.
+- Verified non-negotiables were preserved: RLS+RBAC, owner-only approval, no direct publishing/spend, S3 abstraction, no production data in lower environments.
+- Verified roadmap conflict #23/#24/#25 was explicitly gated rather than silently moved.
 - Verified no prior Phase 0/1 report was modified.
-- Verified repository state: only untracked `docs/phase-2/`; no code/migration/API/infra changes.
+- Verified repository state at that time: only untracked `docs/phase-2/`; no code/migration/API/infra changes.
+
+**Phase 2.5 remediation review (2026-11-24/25):**
+
+- Verified preflight identity, exact branch, clean tree, base/head SHAs, current issue states and PR #15 state before editing.
+- Verified and corrected concrete inconsistencies in scope, DB/API, security wording, benchmark fixtures, image evaluation split, storage arithmetic/matrix, historical reporting and issue traceability.
+- Verified no provider/storage/sector selection was introduced and no benchmark was run.
+- Verified unresolved owner decisions remain unresolved and are explicitly labeled.
+- Verified no code, migration, test, CI, GitHub issue, PR, label, milestone, branch, or deployment changes were made.
+- Performed read-only validation only; no local pytest run and no implementation-readiness claim.
 
 ## 11. Commit and confirmations
 
-- Commit SHA for Phase 2 planning deliverables 01–17: `b51eee6ce964491340c3c5082b097dd62a0ff556` (documentation-only; created after the internal check). This final report is added in a separate documentation-only commit because a file cannot contain its own commit SHA; see `git log -1 --format=%H` after that commit for its SHA.
+- Historical commit SHA for Phase 2 planning deliverables 01–17: `b51eee6ce964491340c3c5082b097dd62a0ff556` (documentation-only).
+- Historical final planning commit: `8da2f9aa161070ab2f4af7beca54b9bd41345e23`.
+- **Phase 2.5 remediation is intentionally not committed:** HEAD remains `8da2f9aa161070ab2f4af7beca54b9bd41345e23`; changes are uncommitted in the working tree for owner review.
 - Confirmations:
   - No application code, migrations, endpoints, frontend screens, provider integrations, dependency changes or infrastructure changed.
   - No production credentials used; no external provider calls or benchmark spending performed.

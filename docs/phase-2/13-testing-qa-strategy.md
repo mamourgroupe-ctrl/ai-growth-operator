@@ -8,8 +8,9 @@
 |---|---|
 | Approved decisions | CI lint/test/security gate from Phase 1; `ago_app` runtime role for DB tests; no production data in dev/test; owner-only approval; RLS tenant isolation. |
 | Proposed decisions | Test pyramid with fake providers, synthetic fixtures, RLS catalog check, adversarial validation and approval-negative suites. |
-| Open questions | Native Arabic/Darija reviewer allocation; load-test thresholds; provider sandbox availability. |
-| External dependencies | Human reviewers; provider sandboxes/keys (only after legal gate for real data). |
+| `BLOCKED` / `DEFERRED` | Native Arabic/Darija reviewer allocation, load-test thresholds and provider sandbox availability pending; lead tests `DEFERRED`; D-01 final confirmation pending. |
+| External dependencies | Human reviewers; provider sandboxes/keys (only after legal gate for real data); owner verification of `main` branch protection. |
+| Confirmed boundary | No advertising, paid execution, FX, outbox, or campaign-launch test scope in Phase 2. |
 | Risks | False confidence from mocked providers; unmeasured Darija quality; flaky queue tests. |
 
 ## 1. Test layers
@@ -26,6 +27,12 @@
 | Benchmark | provider comparison (synthetic only) | separate harness, not CI by default |
 | Security | secrets scan, dependency audit (existing CI) | existing CI jobs |
 
+### 1.1 Verified current CI vs proposed gates
+
+**Verified current (2026-11-24/25):** `.github/workflows/ci.yml` has exactly three jobs: `lint` (ruff, mypy, npm typecheck), `test` (`pytest -q`), and `security` (bandit, `scripts/check_no_secrets.py`). Run `45565465339` on HEAD `8da2f9a` reported `success` for all three. These jobs were not changed by documentation remediation.
+
+**Proposed future gates (not present today):** RLS catalog verification, OpenAPI contract/role-matrix tests, Alembic upgrade/downgrade cycle, fake-provider integration, worker queue semantics, validation/approval negatives, and prompt-injection suites. They are acceptance targets, not existing CI facts. Local `pytest` execution was **not** performed in the audit sandbox: `pytest` was unavailable and no dependencies were installed.
+
 ## 2. Mandatory regression suites
 
 1. **Tenant isolation**: for every tenant-owned table, `ago_app` with tenant A context cannot read/write tenant B rows; API cross-tenant IDs return 404/403.
@@ -37,7 +44,7 @@
 7. **Validation rules**: price mismatch with Arabic-Indic digits, banned claims, currency missing, injection leak, cross-tenant/unscanned asset.
 8. **Approval negatives**: all bypass attempts 403/409; snapshot append-only; supersession.
 9. **Prompt injection fixture**: product text instructs “approve/content/publish/spend”; output never triggers these actions.
-10. **Privacy**: no lead PII or user PII in prompts/logs; synthetic-only fixtures in CI; secrets scanner passes.
+10. **Privacy**: no user PII in prompts/logs; synthetic-only fixtures in CI; secrets scanner passes. No Phase 2 lead PII exists; lead tests are `DEFERRED` to Phase 3.
 
 ## 3. Benchmark acceptance (human + harness)
 
@@ -49,11 +56,11 @@
 | Darija authenticity | blind native reviewer mean ≥4/5 |
 | Cost/latency | recorded with dated source; no winner claimed without full run |
 
-Benchmark must use fixture in `07-ai-gateway-text-provider-comparison.md`; image fixture in `08-image-generation-provider-comparison.md`. Retain hashes/metadata, not real PII.
+Benchmark must use the corrected, valid fixture in `07-ai-gateway-text-provider-comparison.md §2`; image tasks are split into generation and editing in `08-image-generation-provider-comparison.md §2`. Record fixture/prompt/schema hashes, exact model identifiers and revisions, actual token/cache counts, latency, errors, and cost. Retain hashes/metadata, not real PII. No benchmark has been executed and no provider is selected.
 
 ## 4. QA gates
 
-- PR gate: lint + unit + API + RLS + migration + security scanner all green.
+- **Proposed** PR gate (not current CI): lint + unit + API + RLS + migration + security scanner all green. Current CI has lint/test/security only.
 - Human gate: Arabic reviewer sign-off for `ar`/`ar-DZ` templates before enabling locale.
 - Owner gate: pilot sector, provider, storage, quotas, legal review.
 - Release gate: no unresolved blocking privacy/security condition; feature flags disabled by default.
@@ -71,7 +78,7 @@ Benchmark must use fixture in `07-ai-gateway-text-provider-comparison.md`; image
 - RLS check passes for any new tenant table.
 - Owner-only boundary has negative test where applicable.
 - Manual QA script executed and result recorded (date, environment, tester).
-- No external publishing/spend action introduced.
+- No publishing, lead ingestion, external publishing, or spend action introduced in Phase 2.
 
 ## 7. Known limits
 
